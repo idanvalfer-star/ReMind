@@ -1,0 +1,27 @@
+node_modules
+dist
+dist-ssr
+*.local
+
+# Vite / TS build info
+.vite
+*.tsbuildinfo
+
+# Cloudflare / Wrangler
+.wrangler
+.dev.vars
+.dev.vars.*
+
+# Secrets — VAPID private key must never be committed
+.env
+.env.*
+!.env.example
+
+# Editors / OS
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# Test output
+coverage
