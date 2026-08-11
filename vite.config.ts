@@ -61,8 +61,9 @@ export default defineConfig({
     // Engine and parser only — no UI tests, so no jsdom.
     environment: 'node',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.ts'],
-    // The Worker has its own runtime and is tested separately.
-    exclude: ['worker/**', 'node_modules/**', 'dist/**'],
+    // The Worker's crypto is deliberately written against plain WebCrypto with no
+    // workerd-specific globals, so it runs — and is tested — under node unchanged.
+    include: ['src/**/*.test.ts', 'worker/**/*.test.ts'],
+    exclude: ['node_modules/**', 'dist/**'],
   },
 });
