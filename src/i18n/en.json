@@ -17,7 +17,13 @@
   "today": {
     "empty": "Nothing scheduled for today",
     "overdue": "missed",
-    "heading": "Today"
+    "heading": "Today",
+    "quickTasks": "Quick Tasks",
+    "scheduled": "Scheduled Reminders",
+    "week": "Week-at-a-Glance",
+    "calendarOverview": "Calendar Overview",
+    "addReminders": "Add reminders",
+    "noQuickTasks": "Nothing unscheduled"
   },
   "app": {
     "title": "ReMind"
@@ -48,7 +54,8 @@
       "dailyCap": "You have used up your reminders for that day.",
       "none": "Your settings do not allow any reminders.",
       "useSuggestion": "Use {{time}} instead"
-    }
+    },
+    "createReminder": "Create Reminder"
   },
   "nav": {
     "today": "Today",
@@ -104,7 +111,11 @@
     "never": "never",
     "backupOverdue": "It has been a while since your last backup. iOS can clear this app’s storage without warning.",
     "importDone": "Restored {{count}} records",
-    "importFailed": "That file could not be read"
+    "importFailed": "That file could not be read",
+    "system": "System Settings",
+    "frequencyPerDay": "Frequency per day",
+    "restore": "Restore",
+    "interpretation": "Interpretation"
   },
   "install": {
     "heading": "Install ReMind to get reminders",

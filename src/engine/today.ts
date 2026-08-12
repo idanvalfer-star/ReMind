@@ -57,3 +57,28 @@ export async function todayItems(timezone: IanaTz, now: EpochMs = Date.now()): P
 
   return items.sort((a, b) => (a.trigger.nextFireAt ?? 0) - (b.trigger.nextFireAt ?? 0));
 }
+
+/**
+ * Recent captures with nothing scheduled against them.
+ *
+ * The counterpart to `todayItems`: notes that were written down and then never turned into an event
+ * or a reminder. They are the things most likely to be genuinely forgotten, since nothing will ever
+ * resurface them on its own — which makes them worth a place on the first screen.
+ *
+ * "Nothing scheduled" means no outgoing `Link`. An Entry that became an Event, or that produced a
+ * reminder, has one; a bare note does not.
+ */
+export async function unscheduledEntries(limit = 6): Promise<Entry[]> {
+  // Newest first, and only a page of them: this is a glance, not an inbox.
+  const recent = await db.entries.orderBy('capturedAt').reverse().limit(limit * 4).toArray();
+  if (recent.length === 0) return [];
+
+  const linked = new Set<string>();
+  const edges = await db.links
+    .where('[fromType+fromId]')
+    .anyOf(recent.map((entry) => ['entry', entry.id] as [string, string]))
+    .toArray();
+  for (const edge of edges) linked.add(edge.fromId);
+
+  return recent.filter((entry) => !linked.has(entry.id)).slice(0, limit);
+}

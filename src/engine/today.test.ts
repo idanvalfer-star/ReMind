@@ -122,3 +122,57 @@ describe('todayItems', () => {
     expect(await todayItems(JLM, local(10, 8))).toEqual([]);
   });
 });
+
+describe('unscheduledEntries', () => {
+  async function addEntry(body: string, capturedAt: number) {
+    const entry = {
+      id: crypto.randomUUID(),
+      body,
+      rawInput: body,
+      capturedAt,
+      source: 'text' as const,
+      language: 'en' as const,
+      searchTokens: [],
+    };
+    await db.entries.add(entry);
+    return entry;
+  }
+
+  it('returns captures with nothing scheduled against them, newest first', async () => {
+    const { unscheduledEntries } = await import('./today');
+    await addEntry('Older note', 1000);
+    await addEntry('Newer note', 2000);
+
+    const found = await unscheduledEntries();
+    expect(found.map((e) => e.body)).toEqual(['Newer note', 'Older note']);
+  });
+
+  it('excludes an entry that became an event or produced a reminder', async () => {
+    const { unscheduledEntries } = await import('./today');
+    const bare = await addEntry('Just a note', 1000);
+    const interpreted = await addEntry('Dinner tomorrow at 8pm', 2000);
+
+    await db.links.add({
+      id: crypto.randomUUID(),
+      fromType: 'entry',
+      fromId: interpreted.id,
+      toType: 'event',
+      toId: crypto.randomUUID(),
+      relation: 'interpreted-as',
+      createdAt: 2000,
+    });
+
+    expect((await unscheduledEntries()).map((e) => e.id)).toEqual([bare.id]);
+  });
+
+  it('respects the limit', async () => {
+    const { unscheduledEntries } = await import('./today');
+    for (let i = 0; i < 10; i++) await addEntry(`Note ${i}`, 1000 + i);
+    expect(await unscheduledEntries(3)).toHaveLength(3);
+  });
+
+  it('is empty when there is nothing captured', async () => {
+    const { unscheduledEntries } = await import('./today');
+    expect(await unscheduledEntries()).toEqual([]);
+  });
+});

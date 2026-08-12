@@ -106,3 +106,56 @@ export function weekdayLabels(locale: string, weekStart: WeekStart = 0): string[
     formatter.format(new Date(sundayEpoch + ((i + weekStart) % 7) * 86_400_000)),
   );
 }
+
+/**
+ * The seven days of the week containing `now`.
+ *
+ * Shares `CalendarDay` with the month grid so the week strip and the month view agree on what a day
+ * is — same keys, same local-midnight boundaries, same `isToday`.
+ */
+export function weekDays(
+  timezone: IanaTz,
+  now: EpochMs,
+  weekStart: WeekStart = 0,
+): CalendarDay[] {
+  const parts = zonedParts(now, timezone);
+  const weekday = new Date(Date.UTC(parts.year, parts.month - 1, parts.day)).getUTCDay();
+  const back = (weekday - weekStart + 7) % 7;
+
+  // Step back on the calendar rather than by subtracting hours: a local day is 23 or 25 hours long
+  // across a DST boundary.
+  let cursor = zonedWallClockToEpoch({ ...parts, hour: 0, minute: 0 }, timezone);
+  for (let i = 0; i < back; i++) {
+    const at = zonedParts(cursor, timezone);
+    const previous = new Date(Date.UTC(at.year, at.month - 1, at.day) - 86_400_000);
+    cursor = zonedWallClockToEpoch(
+      {
+        year: previous.getUTCFullYear(),
+        month: previous.getUTCMonth() + 1,
+        day: previous.getUTCDate(),
+        hour: 0,
+        minute: 0,
+      },
+      timezone,
+    );
+  }
+
+  const todayKey = localDayKey(now, timezone);
+  const days: CalendarDay[] = [];
+  for (let i = 0; i < 7; i++) {
+    const at = zonedParts(cursor, timezone);
+    const endAt = startOfNextLocalDay(cursor, timezone);
+    const key = localDayKey(cursor, timezone);
+    days.push({
+      key,
+      startAt: cursor,
+      endAt,
+      dayOfMonth: at.day,
+      inMonth: at.month === parts.month && at.year === parts.year,
+      isToday: key === todayKey,
+      weekday: new Date(Date.UTC(at.year, at.month - 1, at.day)).getUTCDay(),
+    });
+    cursor = endAt;
+  }
+  return days;
+}

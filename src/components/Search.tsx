@@ -69,12 +69,12 @@ export function Search({ locale, timezone }: SearchProps) {
       ) : (
         <>
           <p className="muted">{t('search.results', { count: hits.length })}</p>
-          <ul className="today-list">
+          <ul className="item-list">
             {hits.map((hit) => (
-              <li key={hit.entry.id} className="today-item">
-                <div className="today-item__time">{formatDate(hit.entry.capturedAt)}</div>
+              <li key={hit.entry.id} className="item card">
+                <div className="item__time">{formatDate(hit.entry.capturedAt)}</div>
                 {/* The body as captured, not the parsed title. */}
-                <div className="today-item__title">{hit.entry.body}</div>
+                <div className="item__title">{hit.entry.body}</div>
               </li>
             ))}
           </ul>

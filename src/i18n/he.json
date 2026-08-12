@@ -17,7 +17,13 @@
   "today": {
     "empty": "אין תזכורות להיום",
     "overdue": "פוספס",
-    "heading": "היום"
+    "heading": "היום",
+    "quickTasks": "מהיר",
+    "scheduled": "תזכורות מתוזמנות",
+    "week": "מבט על השבוע",
+    "calendarOverview": "סקירת יומן",
+    "addReminders": "הוסף תזכורות",
+    "noQuickTasks": "אין פתקים לא מתוזמנים"
   },
   "app": {
     "title": "ReMind"
@@ -48,7 +54,8 @@
       "dailyCap": "נגמרו לך התזכורות ליום הזה.",
       "none": "ההגדרות שלך לא מאפשרות תזכורות.",
       "useSuggestion": "להשתמש ב-{{time}} במקום"
-    }
+    },
+    "createReminder": "צור תזכורת"
   },
   "nav": {
     "today": "היום",
@@ -104,7 +111,11 @@
     "never": "מעולם",
     "backupOverdue": "עבר זמן מהגיבוי האחרון. iOS עלול למחוק את האחסון של האפליקציה בלי אזהרה.",
     "importDone": "שוחזרו {{count}} רשומות",
-    "importFailed": "לא ניתן לקרוא את הקובץ"
+    "importFailed": "לא ניתן לקרוא את הקובץ",
+    "system": "הגדרות מערכת",
+    "frequencyPerDay": "תדירות ליום",
+    "restore": "שחזור",
+    "interpretation": "פירוש"
   },
   "install": {
     "heading": "התקן את ReMind כדי לקבל תזכורות",

@@ -67,7 +67,7 @@ log(/Added to your calendar/i.test(followup), 'confident capture creates an even
 log(await page.locator('.followup button', { hasText: 'Undo' }).isVisible(), 'undo is offered');
 await page.screenshot({ path: `${OUT}/02-capture-created.png` });
 
-const todayText = (await page.locator('.today-list').textContent().catch(() => '')) ?? '';
+const todayText = (await page.locator('.item-list').textContent().catch(() => '')) ?? '';
 log(true, 'today list state after capture', todayText.trim().slice(0, 80) || '(empty — event is tomorrow)');
 
 // The field must clear after saving.
@@ -88,8 +88,12 @@ await page.locator('.followup button', { hasText: 'In an hour' }).click();
 await page.waitForTimeout(900);
 const afterSet = (await page.locator('.followup').first().textContent()) ?? '';
 log(/Reminder set/i.test(afterSet), 'choosing a preset sets the reminder', afterSet.trim().slice(0, 60));
-const todayAfter = (await page.locator('.today-list').textContent().catch(() => '')) ?? '';
+const todayAfter = (await page.locator('.item-list').textContent().catch(() => '')) ?? '';
 log(/Call Dani/.test(todayAfter), 'reminder appears in Today', todayAfter.trim().slice(0, 80));
+  const weekCells = await page.locator('.week-day').count();
+  log(weekCells === 7, 'week-at-a-glance shows seven days', `${weekCells} cells`);
+  const overview = await page.locator('.month-grid--compact .month-grid__day').count();
+  log(overview === 42, 'calendar overview renders the month', `${overview} cells`);
 await page.screenshot({ path: `${OUT}/04-today.png` });
 
 // ---------------------------------------------------------------- uncertain capture
@@ -124,7 +128,7 @@ await page.locator('.tabbar__tab', { hasText: 'Search' }).click();
 await page.waitForTimeout(500);
 await page.fill('input[type="search"]', 'alex');
 await page.waitForTimeout(900);
-const results = (await page.locator('.today-list').textContent().catch(() => '')) ?? '';
+const results = (await page.locator('.item-list').textContent().catch(() => '')) ?? '';
 log(/Dinner with Alex tomorrow at 8pm/.test(results), 'search finds the entry by its original words', results.trim().slice(0, 90));
 await page.screenshot({ path: `${OUT}/08-search.png` });
 

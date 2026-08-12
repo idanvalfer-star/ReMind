@@ -83,6 +83,8 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
 
   return (
     <section className="settings">
+      <div className="card">
+        <span className="card__label">{t('settings.system')}</span>
       <label className="field">
         <span className="field__label">{t('settings.language')}</span>
         <select
@@ -106,7 +108,9 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
         {t('settings.timezone')}: {settings.timezone}
       </p>
 
-      <h2 className="section-heading">{t('settings.notifications')}</h2>
+      <span className="card__label" style={{ marginBlockStart: '0.75rem' }}>
+        {t('settings.notifications')}
+      </span>
       {availability === 'granted' ? (
         <div className="followup">
           <span>{t('install.granted')}</span>
@@ -133,8 +137,10 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
         <p className="empty">{t('install.unsupported')}</p>
       )}
       {availability !== 'granted' && <p className="muted">{t('install.captureOnly')}</p>}
+      </div>
 
-      <h2 className="section-heading">{t('settings.quietHours')}</h2>
+      <div className="card">
+        <span className="card__label">{t('settings.quietHours')}</span>
       <label className="checkbox">
         <input
           type="checkbox"
@@ -170,19 +176,28 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
         </label>
       </div>
 
+      </div>
+
+      <div className="card">
+        <span className="card__label">{t('settings.frequencyPerDay')}</span>
       <label className="field">
-        <span className="field__label">{t('settings.dailyCap')}</span>
+        <span className="field__label">
+          {t('settings.dailyCap')}: {settings.dailyCap}
+        </span>
         <input
-          className="field__input"
-          type="number"
+          type="range"
           min="0"
-          max="50"
-          inputMode="numeric"
+          max="20"
+          step="1"
           value={settings.dailyCap}
           onChange={(event) => void patch({ dailyCap: Number(event.target.value) })}
         />
       </label>
 
+      </div>
+
+      <div className="card">
+        <span className="card__label">{t('settings.interpretation')}</span>
       <label className="field">
         <span className="field__label">
           {t('settings.confidence')} {settings.confidenceThreshold.toFixed(2)}
@@ -197,7 +212,10 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
         />
       </label>
 
-      <h2 className="section-heading">{t('settings.backup')}</h2>
+      </div>
+
+      <div className="card">
+        <span className="card__label">{t('settings.backup')}</span>
       <p className="muted">{t('settings.lastExport', { when: lastExport })}</p>
       <div className="capture__actions capture__actions--wrap">
         <button type="button" className="button" onClick={() => void runExport()}>
@@ -208,7 +226,7 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
           className="button button--quiet"
           onClick={() => fileInput.current?.click()}
         >
-          {t('settings.import')}
+          {t('settings.restore')}
         </button>
       </div>
       <p className="muted">{t('settings.importReplaces')}</p>
@@ -223,6 +241,8 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
           event.target.value = '';
         }}
       />
+
+      </div>
 
       {message && (
         <p className="followup" role="status">

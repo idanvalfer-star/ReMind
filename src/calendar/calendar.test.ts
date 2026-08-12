@@ -366,3 +366,34 @@ describe('deleteCalendarEvent', () => {
     expect(await db.entries.get(entry.id)).toBeDefined();
   });
 });
+
+describe('weekDays', () => {
+  it('returns the seven days of the week containing the instant', async () => {
+    const { weekDays } = await import('./monthGrid');
+    // 10 June 2026 is a Wednesday; a Sunday-start week runs 7th to 13th.
+    const week = weekDays(JLM, at(10, 15));
+    expect(week).toHaveLength(7);
+    expect(week.map((d) => d.dayOfMonth)).toEqual([7, 8, 9, 10, 11, 12, 13]);
+    expect(week.filter((d) => d.isToday).map((d) => d.dayOfMonth)).toEqual([10]);
+  });
+
+  it('honours a Monday week start', async () => {
+    const { weekDays } = await import('./monthGrid');
+    expect(weekDays(JLM, at(10, 15), 1).map((d) => d.dayOfMonth)).toEqual([8, 9, 10, 11, 12, 13, 14]);
+  });
+
+  it('is contiguous and marks days outside the current month', async () => {
+    const { weekDays } = await import('./monthGrid');
+    // The week containing 1 June 2026 reaches back into May.
+    const week = weekDays(JLM, at(1, 12));
+    for (let i = 1; i < week.length; i++) expect(week[i]!.startAt).toBe(week[i - 1]!.endAt);
+    expect(week.some((d) => !d.inMonth)).toBe(true);
+  });
+
+  it('stays contiguous across a DST transition', async () => {
+    const { weekDays } = await import('./monthGrid');
+    const week = weekDays(JLM, at(27, 12, 0, 3));
+    for (let i = 1; i < week.length; i++) expect(week[i]!.startAt).toBe(week[i - 1]!.endAt);
+    expect(week.filter((d) => d.isToday)).toHaveLength(1);
+  });
+});

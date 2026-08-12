@@ -1,29 +1,44 @@
 /*
- * Base styles.
+ * Base styles and the design system.
+ *
+ * Card-based, on a near-black navy ground with a single blue accent. Sections are titled with
+ * small uppercase labels rather than headings, so the hierarchy reads at a glance on a phone.
  *
  * Written with logical properties throughout (`inline-start`, `margin-inline`, `text-align:
- * start`) rather than left/right, because the UI ships in Hebrew from day one and RTL is a
- * `dir` attribute away. Physical directions here would mean auditing every rule later.
+ * start`) rather than left/right, because the UI ships in Hebrew from day one and RTL is a `dir`
+ * attribute away. Physical directions here would mean auditing every rule later.
  */
 
 :root {
-  --bg: #14122b;
-  --surface: #1e1b4b;
-  --surface-raised: #272357;
-  --border: #363175;
-  --text: #eef2ff;
-  --text-dim: #a5a1c9;
-  --accent: #818cf8;
-  --overdue: #fbbf24;
+  /* Ground: near-black with a blue cast, so cards can sit above it without a heavy border. */
+  --bg: #070b14;
+  --bg-texture: #0a0f1c;
+  --card: #0f1524;
+  --card-raised: #161d30;
+  --border: #1e2740;
+  --border-strong: #2b3654;
+
+  --text: #e8edf7;
+  --text-dim: #7a8699;
+  --text-faint: #55607a;
+
+  /* One accent, used for the primary action, today, and the active tab. Nothing else. */
+  --accent: #2f6bff;
+  --accent-soft: #1b3a7a;
+  --on-accent: #ffffff;
+
+  --overdue: #f5a524;
+  --dot: #4d8dff;
 
   --radius: 14px;
+  --radius-sm: 10px;
   --gap: 12px;
 
   color-scheme: dark;
-  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  /* Hebrew renders small at the same nominal size as Latin. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, Roboto, sans-serif;
+  /* Hebrew renders visually smaller than Latin at the same nominal size. */
   font-size: 17px;
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 * {
@@ -32,211 +47,418 @@
 
 body {
   margin: 0;
-  background: var(--bg);
   color: var(--text);
+  /* A very shallow gradient rather than a flat fill, so the cards have something to lift off. */
+  background:
+    radial-gradient(1200px 600px at 50% -10%, var(--bg-texture) 0%, transparent 70%),
+    var(--bg);
+  background-attachment: fixed;
   /* The status bar is translucent in standalone mode, so content must inset itself. */
   padding-block-start: env(safe-area-inset-top);
-  padding-block-end: env(safe-area-inset-bottom);
   padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
   /* Stop the whole page rubber-banding, which reads as broken in a standalone app. */
   overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
-  max-inline-size: 40rem;
+  max-inline-size: 34rem;
   margin-inline: auto;
   padding: var(--gap);
 }
 
-h1 {
-  font-size: 1.4rem;
-  margin-block: 1rem 0.25rem;
+main {
+  /* The tab bar is fixed, so content needs room to scroll past it. */
+  padding-block-end: calc(76px + env(safe-area-inset-bottom));
 }
 
 .muted {
   color: var(--text-dim);
 }
 
-.today-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+/* ---------------------------------------------------------------- header */
+
+.app-header {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
   gap: var(--gap);
+  margin-block: 0.25rem 1rem;
 }
 
-.today-item {
-  background: var(--surface);
+.app-header h1 {
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+.header-button {
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.header-button[data-active='true'] {
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- cards */
+
+.card {
+  background: var(--card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--gap);
-  /* Logical, so the accent sits on the reading-start edge in both directions. */
-  border-inline-start: 3px solid var(--accent);
   text-align: start;
 }
 
-.today-item[data-overdue='true'] {
-  border-inline-start-color: var(--overdue);
-}
-
-.today-item__time {
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  font-size: 0.9rem;
-}
-
-.today-item__title {
+/* Small uppercase label that titles a card, rather than a heading. */
+.card__label,
+.section-label {
+  display: block;
+  font-size: 0.7rem;
   font-weight: 600;
-  /* Long capture text must wrap rather than stretch the card. */
-  overflow-wrap: anywhere;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-dim);
+  margin-block-end: 0.5rem;
+}
+
+.card-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap);
+  /* stretch, not start: a pair of cards side by side reads as broken when their heights differ. */
+  align-items: stretch;
+}
+
+.section-heading {
+  font-size: 1.05rem;
+  font-weight: 650;
+  margin-block: 1.25rem 0.6rem;
 }
 
 .empty {
-  background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: var(--radius);
-  padding: calc(var(--gap) * 2);
-  text-align: center;
-  color: var(--text-dim);
+  color: var(--text-faint);
+  font-size: 0.9rem;
+  padding-block: 0.5rem;
+}
+
+.empty-box {
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  min-block-size: 54px;
 }
 
 /* ---------------------------------------------------------------- capture */
 
-.app-header h1 {
-  font-size: 1.25rem;
-  letter-spacing: 0.01em;
-}
-
 .capture {
   display: flex;
   flex-direction: column;
-  gap: var(--gap);
-  margin-block-end: 1.5rem;
+  gap: 0.6rem;
+  margin-block-end: 0.5rem;
 }
 
 .capture__input {
   inline-size: 100%;
-  background: var(--surface);
+  background: var(--card);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: var(--gap);
+  padding: 0.85rem var(--gap);
   font: inherit;
   /* Physical resize handles fight a mobile layout. */
   resize: none;
   text-align: start;
 }
 
-.capture__input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+.capture__input::placeholder {
+  color: var(--text-faint);
 }
 
-.capture__input::placeholder {
-  color: var(--text-dim);
+.capture__input:focus-visible,
+.field__input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .capture__actions {
   display: flex;
-  gap: var(--gap);
+  gap: 0.5rem;
   align-items: center;
+  /* The primary action sits on the reading-end edge, mirroring correctly under RTL. */
+  justify-content: flex-end;
 }
 
 .capture__actions--wrap {
   flex-wrap: wrap;
+  justify-content: flex-start;
 }
 
+/* ---------------------------------------------------------------- controls */
+
 .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   background: var(--accent);
-  color: #14122b;
+  color: var(--on-accent);
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   /* 44px is the smallest comfortable touch target on iOS. */
   min-block-size: 44px;
-  padding-inline: 1rem;
+  padding-inline: 1.1rem;
   font: inherit;
+  font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
 }
 
 .button:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: default;
 }
 
 .button--quiet {
-  background: var(--surface-raised);
+  background: var(--card-raised);
   color: var(--text);
-  border-color: var(--border);
+  border-color: var(--border-strong);
   font-weight: 500;
 }
 
-.followup {
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  flex-wrap: wrap;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: var(--gap);
-  text-align: start;
+.button--quiet[data-active='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
-.followup--sheet {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.followup__time {
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
+.button--small {
+  min-block-size: 36px;
+  padding-inline: 0.7rem;
+  font-size: 0.85rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
 .field__label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   color: var(--text-dim);
 }
 
 .field__input {
-  background: var(--surface-raised);
+  background: var(--card-raised);
   color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   min-block-size: 44px;
   padding-inline: 0.75rem;
   font: inherit;
+  font-size: 0.95rem;
   text-align: start;
 }
 
-.field__input:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.section-heading {
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-block-size: 44px;
   font-size: 0.95rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--text-dim);
-  margin-block: 0 0.5rem;
 }
 
-/* ---------------------------------------------------------------- calendar */
+.checkbox input {
+  inline-size: 18px;
+  block-size: 18px;
+  accent-color: var(--accent);
+}
+
+/*
+ * Range inputs are styled explicitly rather than left to `accent-color`, which colours the thumb
+ * but leaves the track at the platform default — a bright white bar against a near-black UI.
+ */
+input[type='range'] {
+  inline-size: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  block-size: 32px;
+  margin: 0;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  block-size: 5px;
+  border-radius: 3px;
+  background: var(--card-raised);
+  border: 1px solid var(--border);
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+  /* Centre the thumb on a 5px track. */
+  margin-block-start: -8px;
+}
+
+input[type='range']::-moz-range-track {
+  block-size: 5px;
+  border-radius: 3px;
+  background: var(--card-raised);
+  border: 1px solid var(--border);
+}
+
+input[type='range']::-moz-range-thumb {
+  inline-size: 20px;
+  block-size: 20px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: none;
+}
+
+input[type='range']:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------- lists */
+
+.item-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.6rem;
+  align-items: baseline;
+  padding-block: 0.35rem;
+  text-align: start;
+}
+
+.item__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--dot);
+  /* Baseline alignment puts a bare circle too low next to text. */
+  transform: translateY(-2px);
+}
+
+.item__dot[data-overdue='true'] {
+  background: var(--overdue);
+}
+
+.item__title {
+  font-size: 0.95rem;
+  font-weight: 550;
+  /* Long capture text must wrap rather than stretch the card. */
+  overflow-wrap: anywhere;
+}
+
+.item__time {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.item__body {
+  grid-column: 2;
+}
+
+/*
+ * A row that is itself a card — used by the calendar day list and by search results, where each
+ * row stands alone rather than sitting inside a titled card.
+ */
+.item.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: stretch;
+}
+
+/* ---------------------------------------------------------------- week strip */
+
+.week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.week-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding-block: 0.4rem;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.week-day__number {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.week-day[data-today='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.week-day[data-today='true'] .week-day__number {
+  color: var(--on-accent);
+}
+
+.week-day__dot {
+  inline-size: 4px;
+  block-size: 4px;
+  border-radius: 50%;
+  background: var(--dot);
+}
+
+.week-day[data-today='true'] .week-day__dot {
+  background: var(--on-accent);
+}
+
+/* ---------------------------------------------------------------- month grid */
 
 .month-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--gap);
-  margin-block: 1rem 0.5rem;
+  margin-block-end: 0.6rem;
+}
+
+.month-header strong {
+  font-size: 0.95rem;
+  font-weight: 650;
 }
 
 .month-grid {
@@ -247,9 +469,9 @@ h1 {
 
 .month-grid__weekday {
   text-align: center;
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  padding-block: 4px;
+  font-size: 0.65rem;
+  color: var(--text-faint);
+  padding-block: 3px;
 }
 
 .month-grid__day {
@@ -259,56 +481,88 @@ h1 {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  background: var(--surface);
+  gap: 1px;
+  background: transparent;
   color: var(--text);
   border: 1px solid transparent;
   border-radius: 8px;
   font: inherit;
+  font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
   cursor: pointer;
 }
 
 /* Days borrowed from the neighbouring months stay visible but recede. */
 .month-grid__day[data-in-month='false'] {
-  color: var(--text-dim);
-  background: transparent;
+  color: var(--text-faint);
 }
 
 .month-grid__day[data-today='true'] {
-  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
   font-weight: 700;
 }
 
-.month-grid__day[data-selected='true'] {
-  background: var(--surface-raised);
-  border-color: var(--text-dim);
+.month-grid__day[data-selected='true']:not([data-today='true']) {
+  background: var(--card-raised);
+  border-color: var(--border-strong);
 }
 
 .month-grid__dot {
-  inline-size: 5px;
-  block-size: 5px;
+  inline-size: 4px;
+  block-size: 4px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--dot);
+}
+
+.month-grid__day[data-today='true'] .month-grid__dot {
+  background: var(--on-accent);
+}
+
+/*
+ * The overview on Today is a glance, not a target. Square cells make a six-row grid taller than
+ * everything above it combined, so the compact variant trades the aspect ratio for a fixed row
+ * height and drops the pointer affordance.
+ */
+.month-grid--compact .month-grid__day {
+  aspect-ratio: auto;
+  min-block-size: 30px;
+  font-size: 0.78rem;
+  border-radius: 6px;
+  cursor: default;
 }
 
 .day-detail {
-  margin-block-start: 1rem;
+  margin-block-start: var(--gap);
 }
 
-.checkbox {
+/* ---------------------------------------------------------------- follow-ups */
+
+.followup {
   display: flex;
   align-items: center;
-  gap: 8px;
-  min-block-size: 44px;
+  gap: var(--gap);
+  flex-wrap: wrap;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  text-align: start;
+  font-size: 0.9rem;
 }
 
-.button[data-active='true'] {
-  border-color: var(--accent);
-  color: var(--accent);
+.followup--sheet {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.7rem;
 }
 
-/* ---------------------------------------------------------------- settings, nav */
+.followup__time {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- settings */
 
 .settings {
   display: flex;
@@ -327,37 +581,40 @@ h1 {
 
 .install-sheet__steps {
   margin: 0;
-  padding-inline-start: 1.25rem;
+  padding-inline-start: 1.2rem;
   color: var(--text-dim);
+  font-size: 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-/* The tab bar is fixed, so main needs room to scroll past it. */
-main {
-  padding-block-end: calc(64px + env(safe-area-inset-bottom));
-}
+/* ---------------------------------------------------------------- tab bar */
 
 .tabbar {
   position: fixed;
   inset-inline: 0;
   inset-block-end: 0;
   display: flex;
-  background: color-mix(in srgb, var(--surface) 92%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--card) 88%, transparent);
+  backdrop-filter: blur(16px);
   border-block-start: 1px solid var(--border);
   padding-block-end: env(safe-area-inset-bottom);
 }
 
 .tabbar__tab {
   flex: 1;
-  min-block-size: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-block-size: 58px;
   background: none;
   border: none;
-  color: var(--text-dim);
+  color: var(--text-faint);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 0.68rem;
   cursor: pointer;
 }
 

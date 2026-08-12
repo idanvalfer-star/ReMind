@@ -122,7 +122,7 @@ export function Capture({ locale, timezone }: CaptureProps) {
       />
       <div className="capture__actions">
         <button type="button" className="button" onClick={() => void submit()} disabled={busy || !text.trim()}>
-          {t('capture.save')}
+          {t('capture.createReminder')}
         </button>
       </div>
 

@@ -233,13 +233,13 @@ export function Calendar({ locale, timezone }: CalendarProps) {
           {dayEvents.length === 0 ? (
             <p className="empty">{t('calendar.noEvents')}</p>
           ) : (
-            <ul className="today-list">
+            <ul className="item-list">
               {dayEvents.map((event) => (
-                <li key={event.id} className="today-item">
-                  <div className="today-item__time">
+                <li key={event.id} className="item card">
+                  <div className="item__time">
                     {event.isAllDay ? t('calendar.allDay') : formatTime(event.startAt)}
                   </div>
-                  <div className="today-item__title">{event.title}</div>
+                  <div className="item__title">{event.title}</div>
                   <div className="capture__actions">
                     <button
                       type="button"

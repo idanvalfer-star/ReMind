@@ -6,24 +6,36 @@
  * budget allows. Everything else sits behind the bottom bar.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db, type Lang } from './db/schema';
 import { detectLocale, detectTimezone, loadSettings } from './db/settings';
 import { reconcile } from './engine/index';
 import { DAY_MS } from './engine/time';
 import { applyDocumentLanguage, changeLanguage } from './i18n/index';
-import { readPlatform, shouldShowInstallSheet } from './install/platform';
+import { pushAvailability, readPlatform, shouldShowInstallSheet } from './install/platform';
 import { Calendar } from './components/Calendar';
 import { Capture } from './components/Capture';
+import {
+  BellIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  SearchIcon,
+  SettingsIcon,
+} from './components/Icons';
 import { InstallSheet } from './components/InstallSheet';
 import { Search } from './components/Search';
 import { Settings } from './components/Settings';
-import { TodayList } from './components/TodayList';
+import { Today } from './components/Today';
 
 type View = 'today' | 'calendar' | 'search' | 'settings';
 
-const VIEWS: View[] = ['today', 'calendar', 'search', 'settings'];
+const VIEWS: { id: View; Icon: (props: { size?: number }) => ReactElement }[] = [
+  { id: 'today', Icon: CheckCircleIcon },
+  { id: 'calendar', Icon: CalendarIcon },
+  { id: 'search', Icon: SearchIcon },
+  { id: 'settings', Icon: SettingsIcon },
+];
 
 export function App() {
   const { t } = useTranslation();
@@ -33,6 +45,9 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const [backupOverdue, setBackupOverdue] = useState(false);
+  // Drives the header bell, so whether reminders can actually reach you is visible at a glance
+  // rather than buried in settings.
+  const [notificationsOn, setNotificationsOn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,9 +62,9 @@ export function App() {
 
       setLocale(settings.locale);
       setTimezone(settings.timezone);
-      setShowInstall(
-        shouldShowInstallSheet(readPlatform(), settings.onboarding.dismissedInstallSheet),
-      );
+      const platform = readPlatform();
+      setShowInstall(shouldShowInstallSheet(platform, settings.onboarding.dismissedInstallSheet));
+      setNotificationsOn(pushAvailability(platform) === 'granted');
       // iOS can clear storage without warning, so the nag is not optional. Only shown once there
       // is something worth losing.
       const since = settings.lastExportAt ?? 0;
@@ -88,6 +103,15 @@ export function App() {
       <main>
         <header className="app-header">
           <h1>{t('app.title')}</h1>
+          <button
+            type="button"
+            className="header-button"
+            data-active={notificationsOn}
+            aria-label={t('settings.notifications')}
+            onClick={() => setView('settings')}
+          >
+            <BellIcon active={notificationsOn} />
+          </button>
         </header>
 
         {showInstall && <InstallSheet onDismiss={dismissInstall} />}
@@ -97,8 +121,8 @@ export function App() {
             {/* Rendered before settings resolve so the field is focusable immediately; it reads
                 what it needs at submit time, not at mount. */}
             <Capture locale={locale} timezone={timezone} />
-            {backupOverdue && <p className="empty">{t('settings.backupOverdue')}</p>}
-            {ready && <TodayList locale={locale} timezone={timezone} />}
+            {backupOverdue && <p className="card empty">{t('settings.backupOverdue')}</p>}
+            {ready && <Today locale={locale} timezone={timezone} />}
           </>
         )}
         {view === 'calendar' && ready && <Calendar locale={locale} timezone={timezone} />}
@@ -109,16 +133,17 @@ export function App() {
       </main>
 
       <nav className="tabbar">
-        {VIEWS.map((candidate) => (
+        {VIEWS.map(({ id, Icon }) => (
           <button
-            key={candidate}
+            key={id}
             type="button"
             className="tabbar__tab"
-            data-active={view === candidate}
-            aria-current={view === candidate ? 'page' : undefined}
-            onClick={() => setView(candidate)}
+            data-active={view === id}
+            aria-current={view === id ? 'page' : undefined}
+            onClick={() => setView(id)}
           >
-            {t(`nav.${candidate}`)}
+            <Icon />
+            {t(`nav.${id}`)}
           </button>
         ))}
       </nav>
