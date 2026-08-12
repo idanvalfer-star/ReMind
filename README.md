@@ -145,6 +145,8 @@ npm run build
 npm run worker:deploy
 ```
 
+Or let CI do it — see [Deploying without a local toolchain](#deploying-without-a-local-toolchain).
+
 ### 5. Store the private key
 
 Secrets can only be set on a Worker that exists, so this comes **after** the first deploy:
@@ -154,6 +156,29 @@ npx wrangler secret put VAPID_PRIVATE_KEY
 ```
 
 For local development put it in `.dev.vars` instead, which is gitignored.
+
+---
+
+## Deploying without a local toolchain
+
+`.github/workflows/deploy.yml` builds and deploys on every push to `main`, and can be run by hand
+from the repository's **Actions** tab. Setting it up is a one-time, browser-only task:
+
+1. **Create a Cloudflare API token.** Cloudflare dashboard → **My Profile → API Tokens → Create
+   Token** → use the **Edit Cloudflare Workers** template. Add `D1 → Edit` to it as well, since the
+   Worker binds a D1 database. Scope the account and zone resources to just this project's account.
+2. **Store it in GitHub.** Repository → **Settings → Secrets and variables → Actions → New
+   repository secret**. Name it exactly `CLOUDFLARE_API_TOKEN` and paste the token as the value.
+   Do not commit it, and do not paste it anywhere else.
+3. **Push, or press Run workflow.** The job runs `npm run lint`, `npm test` and `npm run build`
+   before it deploys, so a failing commit stops at CI rather than at production.
+
+`VAPID_PRIVATE_KEY` is not part of this. It is a **Worker** secret, set once with
+`npx wrangler secret put VAPID_PRIVATE_KEY`, and Cloudflare carries it across deploys — CI never
+sees it, and it must never be added as a GitHub secret or an environment variable in the workflow.
+
+An API token is a real credential: it can deploy and delete Workers on the account. Revoke it from
+the same Cloudflare page if it is ever exposed, and never hand it to anyone, including an assistant.
 
 ---
 

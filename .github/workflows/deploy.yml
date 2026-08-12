@@ -1,0 +1,49 @@
+# Builds and deploys the Worker (SPA assets + /api routes + cron) on every push.
+#
+# This exists so deploying never requires a local toolchain. The only secret is
+# CLOUDFLARE_API_TOKEN, held in GitHub's repository secrets.
+#
+# VAPID_PRIVATE_KEY is deliberately absent: it is a Worker secret set once with
+# `wrangler secret put`, and Cloudflare preserves it across deploys. It must never
+# appear here, in wrangler.toml, or in any file in this repository.
+
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - claude/new-session-5z1pbh
+  # So a deploy can be re-run from the Actions tab without pushing a commit.
+  workflow_dispatch:
+
+# A newer push makes an in-flight deploy obsolete; let it win rather than racing.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Deploys are automatic now, so these are the only thing standing between a
+      # bad commit and production. `build` runs tsc -b, which covers typecheck.
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy
