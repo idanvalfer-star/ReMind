@@ -363,6 +363,10 @@ export async function deliverDuePushes(env: Env, now: number): Promise<void> {
 
   const followUp: D1PreparedStatement[] = [];
   const deadSubscriptions = new Set<string>();
+  // Tracked per subscription rather than per push, so one bad endpoint is counted once per tick
+  // even when several of its reminders come due together.
+  const failedSubscriptions = new Set<string>();
+  const healthySubscriptions = new Set<string>();
 
   for (const row of due.results) {
     // The entire payload: one opaque id. Meaningless without the device's local database.
@@ -378,6 +382,7 @@ export async function deliverDuePushes(env: Env, now: number): Promise<void> {
     });
 
     if (result.ok) {
+      healthySubscriptions.add(row.subscription_id);
       followUp.push(
         env.DB.prepare(
           'UPDATE scheduled_pushes SET sent_at = ?, attempts = attempts + 1 WHERE subscription_id = ? AND trigger_id = ?',
@@ -391,6 +396,8 @@ export async function deliverDuePushes(env: Env, now: number): Promise<void> {
       deadSubscriptions.add(row.subscription_id);
       continue;
     }
+
+    failedSubscriptions.add(row.subscription_id);
 
     const attempts = row.attempts + 1;
     if (result.retryable && attempts < MAX_SEND_ATTEMPTS) {
@@ -417,6 +424,38 @@ export async function deliverDuePushes(env: Env, now: number): Promise<void> {
   for (const subscriptionId of deadSubscriptions) {
     followUp.push(
       env.DB.prepare('DELETE FROM subscriptions WHERE id = ?').bind(subscriptionId),
+    );
+  }
+
+  /**
+   * Keep `failure_count` meaningful.
+   *
+   * A subscription can fail repeatedly without ever returning 404/410 — the usual cause is a
+   * VAPID key that no longer matches the one it was created with, which yields 403 forever. The
+   * column exists to make that visible, and nothing was writing to it, which made both the column
+   * and its comment a lie.
+   *
+   * Nothing reads it yet, for the same reason `TriggerFire` is written and unread: the data is only
+   * collectable as it happens. A subscription sitting at a high count is the signal a future
+   * "your reminders have stopped working, re-enable them" prompt would need, and that signal cannot
+   * be reconstructed after the fact.
+   *
+   * Deliberately not auto-deleted. Retiring a subscription silently disables the user's reminders
+   * with no way for them to find out, which is worse than a row with a big number in it.
+   */
+  for (const subscriptionId of failedSubscriptions) {
+    if (deadSubscriptions.has(subscriptionId)) continue;
+    followUp.push(
+      env.DB.prepare(
+        'UPDATE subscriptions SET failure_count = failure_count + 1 WHERE id = ?',
+      ).bind(subscriptionId),
+    );
+  }
+  for (const subscriptionId of healthySubscriptions) {
+    followUp.push(
+      env.DB.prepare('UPDATE subscriptions SET failure_count = 0 WHERE id = ?').bind(
+        subscriptionId,
+      ),
     );
   }
 

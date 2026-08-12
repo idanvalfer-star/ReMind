@@ -299,3 +299,63 @@ than one fewer option.
 tested and the UI not to be, so anything worth testing was moved out of the components: grid
 geometry, timezone conversion, search ranking, backup validation, and the permission decision table
 are all pure modules with their own suites.
+
+---
+
+## What has actually been verified, and what has not
+
+Recorded because "345 tests pass" was, at one point in this build, true of an app that rendered a
+blank page. The distinction is worth writing down.
+
+**Verified by unit tests** (`npm test`): the timezone maths against real DST transitions, quiet
+hours and the daily cap, trigger evaluation, both date grammars, confidence calibration, the
+tokeniser, search ranking, backup validation, the iOS permission decision table, and the push
+encryption byte-for-byte against `http_ece` — the reference implementation of RFC 8291, written by
+that RFC's author.
+
+**Verified in a real browser** (`scripts/smoke.mjs`, headless Chromium at iPhone viewport): the app
+mounts, capture is focused on load, a confident parse creates an event silently with undo, an
+actionable note offers presets, an uncertain parse asks first, the month grid renders with today
+marked and the event dotted, day detail lists it, search finds an entry by its original words,
+settings renders, the service worker activates, and Hebrew flips the document to RTL with
+translated chrome. This is what caught the blank page.
+
+**Verified against a real Worker and real D1** (local `wrangler dev`): schedule, reconcile,
+unschedule and unsubscribe over signed requests; forged signatures, another device's key, stale
+timestamps and tampered bodies all rejected with 401 and writing nothing; the foreign-key cascade;
+`STRICT` type enforcement; the SSRF guard refusing a cloud-metadata endpoint; and the cron finding
+a due row, encrypting a well-formed 116-byte body, signing VAPID, attempting the POST, handling the
+response and recording the outcome rather than looping on it.
+
+**Not verified, and not verifiable from here:**
+
+- **No push has ever been delivered.** The sandbox's egress allowlist blocks `web.push.apple.com`,
+  so the POST never leaves. An earlier run's `403` was briefly mistaken for Apple rejecting the
+  request; it was the proxy. A probe sending a *deliberately corrupted* VAPID signature returned the
+  identical 403, which is what exposed the mistake — worth remembering as a general lesson about
+  reading a status code as evidence of reaching the thing you meant to reach.
+- Home-screen installation, iOS notification permission, and the `pushsubscriptionchange` recovery
+  path all need a real device.
+
+So the push pipeline is verified as far as the wire and no further. The parts with the least evidence
+behind them are, in order: whether a real push service accepts our VAPID and our ciphertext, and
+whether iOS behaves as the permission table assumes.
+
+---
+
+## `failure_count` was dead schema until it was not
+
+The column was declared with a comment saying it "lets a dead-but-not-404 endpoint be retired", and
+nothing ever incremented it — it was set to 0 at subscribe time and never touched again. Both the
+column and its comment were a lie, and the brief forbids dead code.
+
+Found by running the cron against a real Worker and noticing the counter sitting at 0 after a
+failure. It now increments per subscription per failing tick and resets on success, verified
+accumulating 1 → 2 → 3 across three ticks.
+
+Nothing reads it yet, for the same reason `TriggerFire` is written and unread: a subscription can
+fail forever without ever returning 404 — a VAPID key that no longer matches yields 403
+indefinitely — and that history is only collectable as it happens.
+
+Deliberately not auto-deleted on a high count. Retiring a subscription silently disables the user's
+reminders with no way for them to notice, which is worse than a row with a big number in it.
