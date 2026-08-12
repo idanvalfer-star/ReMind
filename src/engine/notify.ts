@@ -89,12 +89,13 @@ export function composeNotification({
           tag,
         };
       }
-      const time = event.isAllDay
-        ? t('notify.event.allDay')
-        : formatTime(event.startAt, event.timezone, locale);
+      // Separate keys rather than substituting "all day" into the timed phrasing, which
+      // would read "Starts at all day".
       return {
         title: truncate(event.title),
-        body: t('notify.event.body', { time }),
+        body: event.isAllDay
+          ? t('notify.event.allDayBody')
+          : t('notify.event.body', { time: formatTime(event.startAt, event.timezone, locale) }),
         tag,
       };
     }
@@ -123,7 +124,7 @@ export function composeNotification({
 export const NOTIFICATION_KEYS = [
   'notify.event.privateTitle',
   'notify.event.privateBody',
-  'notify.event.allDay',
+  'notify.event.allDayBody',
   'notify.event.body',
   'notify.entry.title',
   'notify.fallback.title',

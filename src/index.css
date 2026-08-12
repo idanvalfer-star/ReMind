@@ -1,0 +1,102 @@
+/*
+ * Base styles.
+ *
+ * Written with logical properties throughout (`inline-start`, `margin-inline`, `text-align:
+ * start`) rather than left/right, because the UI ships in Hebrew from day one and RTL is a
+ * `dir` attribute away. Physical directions here would mean auditing every rule later.
+ */
+
+:root {
+  --bg: #14122b;
+  --surface: #1e1b4b;
+  --surface-raised: #272357;
+  --border: #363175;
+  --text: #eef2ff;
+  --text-dim: #a5a1c9;
+  --accent: #818cf8;
+  --overdue: #fbbf24;
+
+  --radius: 14px;
+  --gap: 12px;
+
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* Hebrew renders small at the same nominal size as Latin. */
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  /* The status bar is translucent in standalone mode, so content must inset itself. */
+  padding-block-start: env(safe-area-inset-top);
+  padding-block-end: env(safe-area-inset-bottom);
+  padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  /* Stop the whole page rubber-banding, which reads as broken in a standalone app. */
+  overscroll-behavior-y: none;
+}
+
+#root {
+  max-inline-size: 40rem;
+  margin-inline: auto;
+  padding: var(--gap);
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin-block: 1rem 0.25rem;
+}
+
+.muted {
+  color: var(--text-dim);
+}
+
+.today-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.today-item {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  /* Logical, so the accent sits on the reading-start edge in both directions. */
+  border-inline-start: 3px solid var(--accent);
+  text-align: start;
+}
+
+.today-item[data-overdue='true'] {
+  border-inline-start-color: var(--overdue);
+}
+
+.today-item__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 0.9rem;
+}
+
+.today-item__title {
+  font-weight: 600;
+  /* Long capture text must wrap rather than stretch the card. */
+  overflow-wrap: anywhere;
+}
+
+.empty {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: calc(var(--gap) * 2);
+  text-align: center;
+  color: var(--text-dim);
+}

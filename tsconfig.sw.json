@@ -1,0 +1,35 @@
+{
+  // The service worker and the modules it shares with the app.
+  //
+  // Separate from tsconfig.app.json because it runs in a different global scope: the SW
+  // declares `self` as a ServiceWorkerGlobalScope, which collides with the DOM lib's
+  // `self: Window`. So this project gets `WebWorker` instead of `DOM`, which also means the
+  // compiler will reject any accidental use of `document` or `window` in shared code — a
+  // useful guarantee, since src/db and src/engine are imported by both sides.
+  //
+  // React components are deliberately outside the include: they legitimately need DOM.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "WebWorker"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "resolveJsonModule": true,
+
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "exactOptionalPropertyTypes": true,
+
+    "composite": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.sw.tsbuildinfo"
+  },
+  "include": ["src/sw.ts", "src/db", "src/engine", "src/i18n", "src/shared"],
+  // Tests run under node with DOM types via tsconfig.app.json.
+  "exclude": ["**/*.test.ts"]
+}

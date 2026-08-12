@@ -1,0 +1,21 @@
+{
+  "notify": {
+    "event": {
+      "body": "Starts at {{time}}",
+      "allDayBody": "All day today",
+      "privateTitle": "Reminder",
+      "privateBody": "You have a private event"
+    },
+    "entry": {
+      "title": "Reminder"
+    },
+    "fallback": {
+      "title": "You have a reminder",
+      "body": "Open ReMind to see it"
+    }
+  },
+  "today": {
+    "empty": "Nothing scheduled for today",
+    "overdue": "missed"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "notify": {
+    "event": {
+      "body": "מתחיל ב-{{time}}",
+      "allDayBody": "כל היום",
+      "privateTitle": "תזכורת",
+      "privateBody": "יש לך אירוע פרטי"
+    },
+    "entry": {
+      "title": "תזכורת"
+    },
+    "fallback": {
+      "title": "יש לך תזכורת",
+      "body": "פתח את ReMind כדי לראות"
+    }
+  },
+  "today": {
+    "empty": "אין תזכורות להיום",
+    "overdue": "פוספס"
+  }
+}

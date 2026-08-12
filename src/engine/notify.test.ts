@@ -67,13 +67,15 @@ describe('composeNotification — event', () => {
   });
 
   it('marks an all-day event instead of inventing a time', () => {
+    // A separate key, not "all day" substituted into the timed phrasing — that would read
+    // "Starts at all day".
     const content = composeNotification({
       trigger,
       target: { type: 'event', event: { ...event, isAllDay: true } },
       t,
       locale: 'en',
     });
-    expect(content.body).toBe('notify.event.body(time=notify.event.allDay)');
+    expect(content.body).toBe('notify.event.allDayBody');
   });
 
   it('withholds the title of a private event entirely', () => {
