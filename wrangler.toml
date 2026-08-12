@@ -21,10 +21,11 @@ not_found_handling = "single-page-application"
 run_worker_first = ["/api/*"]
 
 [[d1_databases]]
+# The binding name the Worker reads as `env.DB`. Deliberately not the `remind_push` that
+# `wrangler d1 create` suggests — the code, not the database name, decides this.
 binding = "DB"
 database_name = "remind-push"
-# Replace with the id printed by `npx wrangler d1 create remind-push` (see README).
-database_id = "REPLACE_ME"
+database_id = "0da66bf4-26c9-4c9d-8433-586d601f2646"
 
 [triggers]
 # Once a minute. 1,440 invocations/day against a 100k/day free-tier ceiling.
