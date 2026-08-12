@@ -16,6 +16,38 @@
   },
   "today": {
     "empty": "אין תזכורות להיום",
-    "overdue": "פוספס"
+    "overdue": "פוספס",
+    "heading": "היום"
+  },
+  "app": {
+    "title": "ReMind"
+  },
+  "capture": {
+    "placeholder": "מה תרצה לזכור?",
+    "save": "שמור",
+    "saved": "נשמר",
+    "undo": "בטל",
+    "eventCreated": "נוסף ליומן",
+    "proposal": {
+      "heading": "זה נכון?",
+      "titleLabel": "כותרת",
+      "titlePlaceholder": "במה מדובר?",
+      "confirm": "הוסף ליומן",
+      "discard": "רק לשמור את ההערה"
+    },
+    "remind": {
+      "offer": "להזכיר לך על זה?",
+      "inAnHour": "בעוד שעה",
+      "thisEvening": "הערב",
+      "tomorrowMorning": "מחר בבוקר",
+      "atParsedTime": "ב-{{time}}",
+      "set": "תזכורת נקבעה ל-{{time}}"
+    },
+    "suppressed": {
+      "quietHours": "זה נופל בשעות השקט שלך, ולכן לא תקבל התראה.",
+      "dailyCap": "נגמרו לך התזכורות ליום הזה.",
+      "none": "ההגדרות שלך לא מאפשרות תזכורות.",
+      "useSuggestion": "להשתמש ב-{{time}} במקום"
+    }
   }
 }

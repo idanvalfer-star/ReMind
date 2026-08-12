@@ -29,7 +29,10 @@
     "composite": true,
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.sw.tsbuildinfo"
   },
-  "include": ["src/sw.ts", "src/db", "src/engine", "src/i18n", "src/shared"],
+  // Only what the service worker actually imports. `src/i18n/resources.ts` is listed by name
+  // rather than the whole directory: `src/i18n/index.ts` is the app's i18next setup, which pulls
+  // in react-i18next and `import.meta.env`, and neither belongs in a worker.
+  "include": ["src/sw.ts", "src/db", "src/engine", "src/i18n/resources.ts", "src/shared"],
   // Tests run under node with DOM types via tsconfig.app.json.
   "exclude": ["**/*.test.ts"]
 }

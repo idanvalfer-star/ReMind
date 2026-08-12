@@ -38,4 +38,4 @@ crons = ["* * * * *"]
 VAPID_PUBLIC_KEY = "BNGCaAaDzVCe3kk7fFfG9-_dAwlDm35I-iXnVKZxXREtH717Ktw6q1jTEc3xb4tcCI8Y-abn9uCKtbYzWgFAHJk"
 # Must be a real mailto: or https: URL the operator controls — push services use it to
 # make contact if the application misbehaves, and some reject obviously fake values.
-VAPID_SUBJECT = "mailto:change-me@example.com"
+VAPID_SUBJECT = "mailto:idan.valfer@gmail.com"

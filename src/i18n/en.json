@@ -16,6 +16,38 @@
   },
   "today": {
     "empty": "Nothing scheduled for today",
-    "overdue": "missed"
+    "overdue": "missed",
+    "heading": "Today"
+  },
+  "app": {
+    "title": "ReMind"
+  },
+  "capture": {
+    "placeholder": "What do you want to remember?",
+    "save": "Save",
+    "saved": "Saved",
+    "undo": "Undo",
+    "eventCreated": "Added to your calendar",
+    "proposal": {
+      "heading": "Is this right?",
+      "titleLabel": "Title",
+      "titlePlaceholder": "What is it?",
+      "confirm": "Add to calendar",
+      "discard": "Just keep the note"
+    },
+    "remind": {
+      "offer": "Remind you about this?",
+      "inAnHour": "In an hour",
+      "thisEvening": "This evening",
+      "tomorrowMorning": "Tomorrow morning",
+      "atParsedTime": "At {{time}}",
+      "set": "Reminder set for {{time}}"
+    },
+    "suppressed": {
+      "quietHours": "That is inside your quiet hours, so it would not notify you.",
+      "dailyCap": "You have used up your reminders for that day.",
+      "none": "Your settings do not allow any reminders.",
+      "useSuggestion": "Use {{time}} instead"
+    }
   }
 }

@@ -8,21 +8,11 @@
 
 import type { Lang } from '../db/schema';
 import { scoreParse } from './confidence';
+import { detectLanguage } from './language';
 import { parseEnglish } from './en';
 import { parseHebrew } from './he';
 import type { ParseOptions, ParseResult } from './types';
 
-const HEBREW_LETTER = /[א-ת]/;
-
-/**
- * Chooses a grammar from the text itself rather than from the UI language.
- *
- * A Hebrew speaker with a Hebrew interface still types plenty of English, and the reverse
- * happens too. The script is the reliable signal; the setting is not.
- */
-export function detectLanguage(text: string): Lang {
-  return HEBREW_LETTER.test(text) ? 'he' : 'en';
-}
 
 /**
  * Parses a capture into an Event proposal with a confidence score.
@@ -62,4 +52,5 @@ function noParse(language: Lang): ParseResult {
 }
 
 export { detectActionable, type ActionableResult } from './actionable';
+export { detectLanguage } from './language';
 export type { ParseOptions, ParseResult, ParsedEvent, ParseSignals } from './types';
