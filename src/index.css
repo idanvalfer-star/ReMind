@@ -228,3 +228,140 @@ h1 {
   color: var(--text-dim);
   margin-block: 0 0.5rem;
 }
+
+/* ---------------------------------------------------------------- calendar */
+
+.month-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  margin-block: 1rem 0.5rem;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.month-grid__weekday {
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  padding-block: 4px;
+}
+
+.month-grid__day {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+/* Days borrowed from the neighbouring months stay visible but recede. */
+.month-grid__day[data-in-month='false'] {
+  color: var(--text-dim);
+  background: transparent;
+}
+
+.month-grid__day[data-today='true'] {
+  border-color: var(--accent);
+  font-weight: 700;
+}
+
+.month-grid__day[data-selected='true'] {
+  background: var(--surface-raised);
+  border-color: var(--text-dim);
+}
+
+.month-grid__dot {
+  inline-size: 5px;
+  block-size: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.day-detail {
+  margin-block-start: 1rem;
+}
+
+.checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+}
+
+.button[data-active='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------- settings, nav */
+
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.settings__row {
+  display: flex;
+  gap: var(--gap);
+}
+
+.settings__row .field {
+  flex: 1;
+}
+
+.install-sheet__steps {
+  margin: 0;
+  padding-inline-start: 1.25rem;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* The tab bar is fixed, so main needs room to scroll past it. */
+main {
+  padding-block-end: calc(64px + env(safe-area-inset-bottom));
+}
+
+.tabbar {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  display: flex;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-block-start: 1px solid var(--border);
+  padding-block-end: env(safe-area-inset-bottom);
+}
+
+.tabbar__tab {
+  flex: 1;
+  min-block-size: 56px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tabbar__tab[data-active='true'] {
+  color: var(--accent);
+  font-weight: 600;
+}

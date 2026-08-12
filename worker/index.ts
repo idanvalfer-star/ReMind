@@ -436,6 +436,15 @@ export default {
     // SPA deep links are served index.html by the platform and never arrive.
     if (!path.startsWith('/api/')) return problem(404, 'not found');
 
+    // The VAPID public key is handed to the browser at subscribe time anyway, so serving it is
+    // not a disclosure. Doing so keeps wrangler.toml the single source of truth for it.
+    if (path === ROUTES.vapidPublicKey) {
+      if (request.method !== 'GET') {
+        return new Response(null, { status: 405, headers: { allow: 'GET' } });
+      }
+      return json({ key: env.VAPID_PUBLIC_KEY });
+    }
+
     if (request.method !== 'POST') {
       return new Response(null, { status: 405, headers: { allow: 'POST' } });
     }

@@ -40,11 +40,16 @@ export const SIGNING_ALGORITHM: EcdsaParams = { name: 'ECDSA', hash: 'SHA-256' }
 // ---------------------------------------------------------------- routes
 
 /**
- * Every route is POST, including `unsubscribe`. Uniformity matters more than REST
+ * Every *signed* route is POST, including `unsubscribe`. Uniformity matters more than REST
  * aesthetics here: the HTTP method is part of the signed canonical string, and one shape
  * for all signed calls removes a whole category of signature mismatch.
+ *
+ * `vapidPublicKey` is the exception: a GET, unsigned, and public. It exists so the key lives
+ * in exactly one place — wrangler.toml — rather than being copied into a client build where
+ * the two could drift.
  */
 export const ROUTES = {
+  vapidPublicKey: '/api/vapid-public-key',
   subscribe: '/api/subscribe',
   schedule: '/api/schedule',
   unschedule: '/api/unschedule',

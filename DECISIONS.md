@@ -202,3 +202,100 @@ including a real one where WebCrypto rejects a `Uint8Array` that might be backed
 
 **One test asserts `ScheduledPush` has exactly two keys.** If a field is ever added there,
 the privacy claim stops being true, and that should fail loudly rather than pass quietly.
+
+---
+
+## Calendar
+
+**The month query is an overlap query, not containment.** An event overlaps a window if it ends
+after the window opens and starts before it closes, so a multi-day event appears on every day it
+touches. Containment would give a list of start times rather than a calendar.
+
+**Editing an event recomputes its `event-adjacent` triggers.** Move a dinner from 20:00 to 21:00 and
+the "leave in 30 minutes" reminder moves with it. Without this the reminder fires at the old time,
+which is worse than not firing — silently wrong rather than visibly absent. A trigger whose new time
+is no longer permitted is deactivated rather than left pointing at an instant it cannot fire at.
+
+**Deleting an event cancels its triggers rather than deleting them**, so the delivery history keeps
+its subject, and leaves any `Entry` that produced it untouched. Deleting a calendar entry is not a
+request to forget what was written.
+
+**The grid is always six weeks.** A month can span six calendar weeks, and a layout that changes
+height between months is visibly unstable to scroll through.
+
+**`datetime-local` conversion is hand-written and tested.** The value is a bare wall clock with no
+zone, and the browser interprets it in the *host* zone — which is not necessarily the event's. Both
+`new Date(value)` and `toISOString().slice(0,16)` are wrong here, and both are the standard way to
+get it wrong.
+
+---
+
+## Search and backup
+
+**Ranking exploits the multiEntry index.** `anyOf` returns one row per matching token, so counting
+duplicates *is* the term-overlap score; no separate scoring pass is needed. Ties break on recency.
+
+**Import replaces rather than merges.** Merging two divergent copies of an entity graph needs
+conflict rules this app has no basis for inventing, and a half-merged memory is worse than either
+version. The whole import runs in one transaction, so a malformed file leaves existing data intact
+rather than half-erased.
+
+**A backup from a newer schema version is refused, not best-effort imported.** Silently dropping
+fields the build does not recognise would lose data without telling anyone. Unknown *tables* at the
+same schema version are skipped and named, which is forward-compatible without being reckless.
+
+---
+
+## iOS install and permissions
+
+**`pushAvailability` is a pure function with an exhaustive test table.** On iOS a notification
+prompt fired from a browser tab does not merely fail — it burns the user's one chance and cannot be
+re-asked without a trip into system settings. A property test asserts the function never returns
+`available` for an iOS tab under any combination of inputs.
+
+**An iOS browser tab is told "install first", not "unsupported".** Both are technically true;
+only one is actionable.
+
+**The user is told outright that skipping installation means no reminders**, in the install sheet and
+again in settings, rather than being left to discover it.
+
+---
+
+## The VAPID public key is served by the Worker
+
+`GET /api/vapid-public-key`, unsigned, because the key is handed to the browser at subscribe time
+anyway. The alternative was to inject it into the client build from an env var, which would put the
+same value in two places — `wrangler.toml` and a `.env` — with nothing keeping them in step.
+
+---
+
+## Bundle size
+
+**The parser is lazy-loaded.** chrono-node plus both grammars is a 56 KB chunk fetched on first
+submit, which is after the Entry is already saved, so the fetch cannot cost anyone a capture. The
+entry bundle is ~393 KB, ~126 KB gzipped.
+
+That is a modest improvement rather than a dramatic one, and it is worth being clear that bundle size
+is *not* what makes launch fast here: the service worker precaches everything, so after install the
+app is not network-bound at all. The requirement is met by precaching; the split is just good hygiene.
+
+---
+
+## UI
+
+**Capture is the landing view, not a tab.** "Launch to capture under one second" is a requirement,
+and any navigation between launch and the field spends more than the budget allows. The field mounts
+focused and reads nothing — no settings, no parse, no network — before accepting a keystroke.
+
+**Logical CSS properties throughout** (`inline-start`, `margin-inline`, `text-align: start`), so
+Hebrew RTL is one `dir` attribute rather than an audit of every rule.
+
+**Three reminder presets instead of a time picker.** "Call Dani" is the archetypal actionable capture
+and carries no date, so an offer that only appeared when a time was parsed would miss the main case.
+"This evening" disappears once evening has passed — an option that silently means tomorrow is worse
+than one fewer option.
+
+**The React components are deliberately thin.** The brief asks for the engine and parser to be
+tested and the UI not to be, so anything worth testing was moved out of the components: grid
+geometry, timezone conversion, search ranking, backup validation, and the permission decision table
+are all pure modules with their own suites.

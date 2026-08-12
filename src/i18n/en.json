@@ -49,5 +49,74 @@
       "none": "Your settings do not allow any reminders.",
       "useSuggestion": "Use {{time}} instead"
     }
+  },
+  "nav": {
+    "today": "Today",
+    "calendar": "Calendar",
+    "search": "Search",
+    "settings": "Settings"
+  },
+  "calendar": {
+    "prevMonth": "Previous month",
+    "nextMonth": "Next month",
+    "today": "Today",
+    "noEvents": "Nothing on this day",
+    "add": "Add event",
+    "edit": "Edit event",
+    "titleLabel": "Title",
+    "titlePlaceholder": "What is it?",
+    "startLabel": "Starts",
+    "endLabel": "Ends",
+    "allDay": "All day",
+    "private": "Keep the title off notifications",
+    "travelBuffer": "Travel time (minutes)",
+    "save": "Save",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "remindMe": "Remind me before",
+    "reminderNone": "No reminder",
+    "reminderSet": "Reminder at {{time}}",
+    "minutesBefore": "{{count}} minutes before",
+    "hourBefore": "1 hour before",
+    "atStart": "At the time"
+  },
+  "search": {
+    "placeholder": "Search everything you have captured",
+    "noResults": "Nothing matched",
+    "results": "{{count}} found",
+    "prompt": "Type to search"
+  },
+  "settings": {
+    "language": "Language",
+    "timezone": "Time zone",
+    "quietHours": "Quiet hours",
+    "quietHoursOn": "Silence reminders overnight",
+    "quietFrom": "From",
+    "quietTo": "Until",
+    "dailyCap": "Reminders per day",
+    "confidence": "Create events automatically above",
+    "notifications": "Notifications",
+    "backup": "Backup",
+    "export": "Export a backup",
+    "import": "Restore from a backup",
+    "importReplaces": "Restoring replaces everything currently stored on this device.",
+    "lastExport": "Last backup {{when}}",
+    "never": "never",
+    "backupOverdue": "It has been a while since your last backup. iOS can clear this app’s storage without warning.",
+    "importDone": "Restored {{count}} records",
+    "importFailed": "That file could not be read"
+  },
+  "install": {
+    "heading": "Install ReMind to get reminders",
+    "why": "Safari cannot send notifications from a browser tab. Reminders only work once ReMind is on your home screen.",
+    "step1": "Tap the Share button in Safari",
+    "step2": "Choose “Add to Home Screen”",
+    "step3": "Open ReMind from your home screen",
+    "dismiss": "Not now",
+    "enable": "Turn on reminders",
+    "granted": "Reminders are on",
+    "denied": "Notifications are blocked. You can re-enable them in iOS Settings under ReMind.",
+    "unsupported": "This browser cannot receive push notifications.",
+    "captureOnly": "Without notifications ReMind still captures and shows your reminders in the app — it just cannot interrupt you."
   }
 }

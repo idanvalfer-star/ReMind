@@ -257,6 +257,52 @@ export async function snoozeTrigger(triggerId: ID, until: EpochMs): Promise<Regi
   return { kind: 'registered', trigger: updated };
 }
 
+/**
+ * Recomputes every `event-adjacent` trigger hanging off an event, after its timing changed.
+ *
+ * This is the cross-module behaviour that makes the calendar and the engine one product rather
+ * than two features. Move a dinner from 20:00 to 21:00 and the "leave in 30 minutes" reminder has
+ * to move with it — otherwise it fires at the old time, which is worse than not firing at all,
+ * because it is silently wrong rather than visibly absent.
+ *
+ * A trigger whose new time is no longer permitted is deactivated rather than left pointing at an
+ * instant it cannot fire at. It stays visible in Today, where the user can act on it.
+ */
+export async function recomputeTriggersForEvent(eventId: ID): Promise<void> {
+  const event = await db.events.get(eventId);
+  const triggers = await db.triggers
+    .where('[targetType+targetId]')
+    .equals(['event', eventId])
+    .toArray();
+
+  for (const trigger of triggers) {
+    if (!trigger.active || trigger.condition.kind !== 'event-adjacent') continue;
+
+    const desired = desiredFireAt(trigger.condition, event);
+    if (desired === null) {
+      await cancelTrigger(trigger.id);
+      continue;
+    }
+
+    const decision = resolveFireTime(desired, await scheduleContext(trigger.id));
+    if (decision.kind === 'suppressed') {
+      await cancelTrigger(trigger.id);
+      continue;
+    }
+    if (decision.fireAt === trigger.nextFireAt) continue;
+
+    await db.triggers.update(trigger.id, {
+      nextFireAt: decision.fireAt,
+      syncedFireAt: null,
+      updatedAt: Date.now(),
+    });
+    const mirrored = await mirror((ctx) =>
+      schedulePushes(ctx, [{ triggerId: trigger.id, fireAt: decision.fireAt }]),
+    );
+    if (mirrored) await db.triggers.update(trigger.id, { syncedFireAt: decision.fireAt });
+  }
+}
+
 /** Records what the user did with a delivered reminder. */
 export async function recordTriggerResponse(
   triggerId: ID,

@@ -49,5 +49,74 @@
       "none": "ההגדרות שלך לא מאפשרות תזכורות.",
       "useSuggestion": "להשתמש ב-{{time}} במקום"
     }
+  },
+  "nav": {
+    "today": "היום",
+    "calendar": "יומן",
+    "search": "חיפוש",
+    "settings": "הגדרות"
+  },
+  "calendar": {
+    "prevMonth": "חודש קודם",
+    "nextMonth": "חודש הבא",
+    "today": "היום",
+    "noEvents": "אין כלום ביום הזה",
+    "add": "הוסף אירוע",
+    "edit": "עריכת אירוע",
+    "titleLabel": "כותרת",
+    "titlePlaceholder": "במה מדובר?",
+    "startLabel": "מתחיל",
+    "endLabel": "מסתיים",
+    "allDay": "כל היום",
+    "private": "להסתיר את הכותרת מההתראות",
+    "travelBuffer": "זמן נסיעה (דקות)",
+    "save": "שמור",
+    "delete": "מחק",
+    "cancel": "ביטול",
+    "remindMe": "להזכיר לי לפני",
+    "reminderNone": "בלי תזכורת",
+    "reminderSet": "תזכורת ב-{{time}}",
+    "minutesBefore": "{{count}} דקות לפני",
+    "hourBefore": "שעה לפני",
+    "atStart": "בזמן האירוע"
+  },
+  "search": {
+    "placeholder": "חיפוש בכל מה שתפסת",
+    "noResults": "לא נמצא כלום",
+    "results": "נמצאו {{count}}",
+    "prompt": "הקלד כדי לחפש"
+  },
+  "settings": {
+    "language": "שפה",
+    "timezone": "אזור זמן",
+    "quietHours": "שעות שקט",
+    "quietHoursOn": "להשתיק תזכורות בלילה",
+    "quietFrom": "מ-",
+    "quietTo": "עד",
+    "dailyCap": "תזכורות ביום",
+    "confidence": "ליצור אירועים אוטומטית מעל",
+    "notifications": "התראות",
+    "backup": "גיבוי",
+    "export": "ייצוא גיבוי",
+    "import": "שחזור מגיבוי",
+    "importReplaces": "שחזור יחליף את כל מה ששמור במכשיר הזה.",
+    "lastExport": "גיבוי אחרון {{when}}",
+    "never": "מעולם",
+    "backupOverdue": "עבר זמן מהגיבוי האחרון. iOS עלול למחוק את האחסון של האפליקציה בלי אזהרה.",
+    "importDone": "שוחזרו {{count}} רשומות",
+    "importFailed": "לא ניתן לקרוא את הקובץ"
+  },
+  "install": {
+    "heading": "התקן את ReMind כדי לקבל תזכורות",
+    "why": "ספארי לא יכול לשלוח התראות מלשונית בדפדפן. תזכורות עובדות רק כאשר ReMind נמצא במסך הבית.",
+    "step1": "לחץ על כפתור השיתוף בספארי",
+    "step2": "בחר ״הוסף למסך הבית״",
+    "step3": "פתח את ReMind ממסך הבית",
+    "dismiss": "לא עכשיו",
+    "enable": "הפעל תזכורות",
+    "granted": "התזכורות פועלות",
+    "denied": "ההתראות חסומות. אפשר להפעיל אותן מחדש בהגדרות iOS תחת ReMind.",
+    "unsupported": "הדפדפן הזה לא יכול לקבל התראות דחיפה.",
+    "captureOnly": "בלי התראות ReMind עדיין שומר ומציג את התזכורות באפליקציה — הוא פשוט לא יכול להפריע לך."
   }
 }
