@@ -9,10 +9,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { db, type Lang } from './db/schema';
-import { detectTimezone, loadSettings } from './db/settings';
+import { detectLocale, detectTimezone, loadSettings } from './db/settings';
 import { reconcile } from './engine/index';
 import { DAY_MS } from './engine/time';
-import { applyDocumentLanguage, initI18n } from './i18n/index';
+import { applyDocumentLanguage, changeLanguage } from './i18n/index';
 import { readPlatform, shouldShowInstallSheet } from './install/platform';
 import { Calendar } from './components/Calendar';
 import { Capture } from './components/Capture';
@@ -28,7 +28,7 @@ const VIEWS: View[] = ['today', 'calendar', 'search', 'settings'];
 export function App() {
   const { t } = useTranslation();
   const [view, setView] = useState<View>('today');
-  const [locale, setLocale] = useState<Lang>('en');
+  const [locale, setLocale] = useState<Lang>(detectLocale);
   const [timezone, setTimezone] = useState(detectTimezone);
   const [ready, setReady] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
@@ -38,10 +38,13 @@ export function App() {
     let cancelled = false;
     void (async () => {
       const settings = await loadSettings();
-      await initI18n(settings.locale);
       if (cancelled) return;
 
-      applyDocumentLanguage(settings.locale);
+      // i18n was already initialised from navigator before the first render; this only switches
+      // language if the stored preference differs from what was guessed.
+      await changeLanguage(settings.locale);
+      if (cancelled) return;
+
       setLocale(settings.locale);
       setTimezone(settings.timezone);
       setShowInstall(
@@ -84,7 +87,7 @@ export function App() {
     <>
       <main>
         <header className="app-header">
-          <h1>{ready ? t('app.title') : 'ReMind'}</h1>
+          <h1>{t('app.title')}</h1>
         </header>
 
         {showInstall && <InstallSheet onDismiss={dismissInstall} />}

@@ -20,9 +20,15 @@ English/Hebrew parsing, search, backup, and the iOS install flow.
 Verified: 345 tests, `tsc` clean across four project configs, `eslint` clean, and the production
 build produces a working service worker.
 
-**Not yet verified end to end on a device.** Everything below the UI is covered by tests, and the
-push crypto is checked byte-for-byte against the reference implementation, but no real iPhone has
-installed this and received a real push. That gap closes on your first deploy, not before.
+**Verified in a real browser.** `scripts/smoke.mjs` drives the built app in headless Chromium at
+iPhone viewport size and checks 24 behaviours end to end: capture creating an event silently,
+the actionable offer, the confirmation sheet, the month grid, search, settings, and a full
+Hebrew/RTL round trip. It found a fatal bug the unit tests could not — see the note at the top of
+that file.
+
+**Not yet verified on an actual iPhone.** Push delivery, home-screen installation and iOS
+notification permission cannot be exercised in a headless browser. That gap closes on your first
+deploy, not before.
 
 Out of scope for Phase 1, by design: the People and Facts module, trips and packing, spaced
 repetition, semantic search, OCR, and any LLM-based interpretation.
@@ -66,6 +72,17 @@ npm install
 npm test          # engine and parser suites
 npm run dev       # SPA on :5173
 ```
+
+To drive the built app in a real browser:
+
+```bash
+npm run build
+npx vite preview --port 4173 &
+npx playwright install chromium     # once
+node scripts/smoke.mjs              # screenshots land in ./smoke-shots
+```
+
+Playwright is intentionally not a dependency — this is a verification tool, not part of the suite.
 
 The service worker is built in dev too, so install and notification behaviour can be exercised
 locally — though iOS push specifically requires a real HTTPS deploy and a home-screen install.
