@@ -16,7 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 
 /** Bumped whenever `stores()` changes. Also stamped into JSON exports. */
-export const DB_VERSION = 1;
+export const DB_VERSION = 2;
 
 // ---------------------------------------------------------------- primitives
 
@@ -90,17 +90,36 @@ export interface Event {
   updatedAt: EpochMs;
 }
 
-// ---------------------------------------------------------------- people (declared, not yet used)
+// ---------------------------------------------------------------- people
 
 export interface Person {
   id: ID;
   name: string;
+  /**
+   * Other ways this person gets written down — nicknames, a Hebrew spelling of a name
+   * usually typed in English, a surname on its own. Indexed `*aliases`, so mention
+   * detection is an index hit rather than a scan over every person.
+   */
   aliases: string[];
+  /** Days between check-ins. `null` means this person is not on a cadence. */
   cadenceDays: number | null;
   lastInteractionAt: EpochMs | null;
+  /**
+   * The cadence clock's starting point for someone never yet interacted with. Without it,
+   * a new person with a 14-day cadence has no anchor and the first nudge has no date.
+   */
+  createdAt: EpochMs;
 }
 
 export type FactKind = 'preference' | 'gift-idea' | 'milestone' | 'relation' | 'misc';
+
+export const FACT_KINDS: readonly FactKind[] = [
+  'preference',
+  'gift-idea',
+  'milestone',
+  'relation',
+  'misc',
+] as const;
 
 /** An atom of memory about a Person. A coffee order and a kid's name are the same shape. */
 export interface Fact {
@@ -111,6 +130,7 @@ export interface Fact {
   /** 0..1 */
   confidence: number;
   sourceEntryId: ID | null;
+  createdAt: EpochMs;
 }
 
 // ---------------------------------------------------------------- trips (declared, not yet used)
@@ -141,16 +161,38 @@ export type TriggerKind = 'time' | 'event-adjacent' | 'cadence' | 'spaced';
 /**
  * The *rule*. `Trigger.nextFireAt` is the materialised result of evaluating it against
  * the clock, quiet hours and the daily cap.
- *
- * Only `time` and `event-adjacent` have evaluators today. The other two arms exist so
- * the discriminant is exhaustive at the type level — that is a type, not dead code, and
- * it means adding an evaluator later is a compile error until it is handled everywhere.
  */
 export type TriggerCondition =
   | { kind: 'time'; at: EpochMs; timezone: IanaTz }
   | { kind: 'event-adjacent'; eventId: ID; offsetMinutes: number; includeTravelBuffer: boolean }
-  | { kind: 'cadence'; personId: ID; days: number }
-  | { kind: 'spaced'; entryId: ID; ease: number; intervalDays: number; reps: number };
+  | {
+      kind: 'cadence';
+      personId: ID;
+      days: number;
+      /**
+       * Minutes past local midnight to land on. A cadence reminder is not tied to a moment
+       * the way an event is — "sometime around now, N days later" — so without a preferred
+       * hour it would inherit whatever minute the person was added at, and a 03:00 nudge is
+       * suppressed by quiet hours rather than delivered. The hour is part of the rule.
+       */
+      atMinuteOfDay: number;
+      timezone: IanaTz;
+    }
+  | {
+      kind: 'spaced';
+      entryId: ID;
+      /** SM-2 easiness factor, ≥ 1.3. */
+      ease: number;
+      intervalDays: number;
+      reps: number;
+      /**
+       * When this card was last shown. The next due date is derived from it rather than
+       * stored, so a change to `intervalDays` takes effect without a second write.
+       */
+      lastReviewedAt: EpochMs;
+      atMinuteOfDay: number;
+      timezone: IanaTz;
+    };
 
 export interface Trigger {
   /** The only piece of this record the push backend ever sees. */
@@ -220,7 +262,7 @@ export type LinkRelation =
   | 'interpreted-as'
   /** entry → trigger: this Entry produced that reminder. */
   | 'reminds-of'
-  /** trigger → event: this reminder hangs off that Event. */
+  /** trigger → event | person: this reminder hangs off that thing. */
   | 'about';
 
 // ---------------------------------------------------------------- singletons
@@ -301,7 +343,11 @@ export class ReMindDB extends Dexie {
 
   constructor(name = 'remind') {
     super(name);
-    this.version(DB_VERSION).stores({
+
+    // Version 1 is kept rather than folded into the latest declaration. Dexie can infer the
+    // upgrade either way, but the chain is the only record of what shipped, and this app is
+    // already installed on a device holding real data.
+    this.version(1).stores({
       entries: 'id, capturedAt, source, language, *searchTokens',
       events: 'id, startAt, endAt, [startAt+endAt], sourceEntryId',
       people: 'id, name, *aliases, lastInteractionAt, cadenceDays',
@@ -314,6 +360,19 @@ export class ReMindDB extends Dexie {
       links: 'id, [fromType+fromId], [toType+toId], relation',
       settings: 'id',
       pushRegistration: 'id',
+    });
+
+    // v2 — people and trips stop being declarations and start being features. Only indexes
+    // change; no row is rewritten, so no `upgrade()` is needed. `people` and `facts` were
+    // empty in v1 (nothing could write them), which is why `createdAt` can be added as a
+    // required field without a backfill.
+    this.version(2).stores({
+      people: 'id, name, *aliases, lastInteractionAt, cadenceDays, createdAt',
+      facts: 'id, personId, [personId+kind], kind, sourceEntryId, createdAt',
+      // `active` on its own: opportunistic location resurfacing needs every live trigger
+      // regardless of when it is due, and Dexie cannot query a prefix of a compound index.
+      triggers:
+        'id, active, [active+nextFireAt], nextFireAt, kind, [targetType+targetId], snoozedUntil, lastFiredAt',
     });
   }
 }

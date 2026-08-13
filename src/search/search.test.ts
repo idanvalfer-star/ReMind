@@ -70,10 +70,11 @@ describe('searchEntries', () => {
     expect(await searchEntries('שלום')).toHaveLength(1);
   });
 
-  it('matches across an apostrophe', async () => {
+  it('finds a possessive by the bare name, which is what anyone would type', async () => {
     await addEntry("Sarah's vase", 1000);
-    expect(await searchEntries('sarahs')).toHaveLength(1);
+    expect(await searchEntries('sarah')).toHaveLength(1);
     expect(await searchEntries("sarah's")).toHaveLength(1);
+    expect(await searchEntries('Sarah’s')).toHaveLength(1);
   });
 
   it('returns nothing for a query with no usable terms', async () => {

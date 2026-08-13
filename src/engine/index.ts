@@ -20,7 +20,6 @@ import {
   db,
   type EntityType,
   type EpochMs,
-  type Event,
   type ID,
   type Link,
   type LinkRelation,
@@ -28,7 +27,12 @@ import {
   type TriggerResponse,
 } from '../db/schema';
 import { loadSettings } from '../db/settings';
-import { desiredFireAt, type SchedulableCondition } from './evaluate';
+import {
+  desiredFireAt,
+  isSchedulable,
+  type SchedulableCondition,
+  type TriggerTargets,
+} from './evaluate';
 import { recordResponse } from './log';
 import { resolveFireTime, type ScheduleContext, type SuppressionReason } from './schedule';
 import {
@@ -91,9 +95,16 @@ async function scheduleContext(excludeTriggerId?: ID): Promise<ScheduleContext> 
   };
 }
 
-async function linkedEvent(condition: SchedulableCondition): Promise<Event | undefined> {
-  if (condition.kind !== 'event-adjacent') return undefined;
-  return db.events.get(condition.eventId);
+/** Fetches whatever the condition's evaluator needs, and nothing more. */
+async function triggerTargets(condition: SchedulableCondition): Promise<TriggerTargets> {
+  switch (condition.kind) {
+    case 'time':
+      return {};
+    case 'event-adjacent':
+      return { event: await db.events.get(condition.eventId) };
+    case 'cadence':
+      return { person: await db.people.get(condition.personId) };
+  }
 }
 
 /**
@@ -140,8 +151,7 @@ async function mirror(work: (ctx: SignedContext) => Promise<unknown>): Promise<b
  * mirrored to the backend. On suppression nothing is written at all.
  */
 export async function registerTrigger(input: RegisterTriggerInput): Promise<RegisterOutcome> {
-  const event = await linkedEvent(input.condition);
-  const desired = desiredFireAt(input.condition, event);
+  const desired = desiredFireAt(input.condition, await triggerTargets(input.condition));
   if (desired === null) return { kind: 'missing-target' };
 
   const decision = resolveFireTime(desired, await scheduleContext());
@@ -270,15 +280,54 @@ export async function snoozeTrigger(triggerId: ID, until: EpochMs): Promise<Regi
  */
 export async function recomputeTriggersForEvent(eventId: ID): Promise<void> {
   const event = await db.events.get(eventId);
-  const triggers = await db.triggers
-    .where('[targetType+targetId]')
-    .equals(['event', eventId])
-    .toArray();
+  await recomputeAll('event', eventId, 'event-adjacent', { event });
+}
 
-  for (const trigger of triggers) {
-    if (!trigger.active || trigger.condition.kind !== 'event-adjacent') continue;
+/**
+ * Recomputes the cadence trigger for a person, after an interaction was logged or the interval
+ * changed.
+ *
+ * The counterpart to `recomputeTriggersForEvent`, and the step that makes a cadence a *loop*
+ * rather than a single alarm: `cadenceFireAt` reads `lastInteractionAt`, so re-evaluating after
+ * a check-in is what pushes the next nudge out by another interval. Without this call, a cadence
+ * fires once and never again.
+ */
+export async function recomputeCadenceForPerson(personId: ID): Promise<void> {
+  const person = await db.people.get(personId);
+  // Someone taken off a cadence keeps no pending nudge. Deactivating rather than recomputing is
+  // the difference between "not on a cadence" and "on a cadence that never comes due".
+  if (person && person.cadenceDays === null) {
+    for (const trigger of await triggersFor('person', personId)) {
+      if (trigger.kind === 'cadence' && trigger.active) await cancelTrigger(trigger.id);
+    }
+    return;
+  }
+  await recomputeAll('person', personId, 'cadence', { person });
+}
 
-    const desired = desiredFireAt(trigger.condition, event);
+async function triggersFor(targetType: EntityType, targetId: ID): Promise<Trigger[]> {
+  return db.triggers.where('[targetType+targetId]').equals([targetType, targetId]).toArray();
+}
+
+/**
+ * Re-evaluates every active trigger of one kind against a target whose data just changed.
+ *
+ * Shared by the event and cadence paths because the sequence is identical and subtle: evaluate,
+ * re-check the constraints against the *other* triggers only, write, mirror. Getting the
+ * exclusion wrong here means a trigger competes with itself for its own day's cap budget and
+ * silently deactivates on every recompute.
+ */
+async function recomputeAll(
+  targetType: EntityType,
+  targetId: ID,
+  kind: SchedulableCondition['kind'],
+  targets: TriggerTargets,
+): Promise<void> {
+  for (const trigger of await triggersFor(targetType, targetId)) {
+    if (!trigger.active || trigger.condition.kind !== kind) continue;
+    if (!isSchedulable(trigger.condition)) continue;
+
+    const desired = desiredFireAt(trigger.condition, targets);
     if (desired === null) {
       await cancelTrigger(trigger.id);
       continue;

@@ -16,9 +16,10 @@
  */
 
 import { precacheAndRoute } from 'workbox-precaching';
-import { db, type Entry, type Event, type Trigger } from './db/schema';
+import { db } from './db/schema';
 import { loadSettings } from './db/settings';
-import { composeNotification, type NotificationTarget } from './engine/notify';
+import { composeNotification } from './engine/notify';
+import { resolveTriggerTarget } from './engine/target';
 import { recordFire, recordResponse } from './engine/log';
 import { pendingPushes, reconcilePushes, subscribe } from './engine/sync';
 import { createTranslator } from './i18n/resources';
@@ -47,24 +48,6 @@ function parseTriggerId(event: PushEvent): string | null {
     return typeof payload?.t === 'string' && payload.t.length > 0 ? payload.t : null;
   } catch {
     return null;
-  }
-}
-
-/** Reads whatever the trigger points at, or reports that it is gone. */
-async function resolveTarget(trigger: Trigger): Promise<NotificationTarget> {
-  switch (trigger.targetType) {
-    case 'event': {
-      const event: Event | undefined = await db.events.get(trigger.targetId);
-      return event ? { type: 'event', event } : { type: 'unknown' };
-    }
-    case 'entry': {
-      const entry: Entry | undefined = await db.entries.get(trigger.targetId);
-      return entry ? { type: 'entry', entry } : { type: 'unknown' };
-    }
-    default:
-      // Later phases add person- and trip-targeted triggers; until then anything else is
-      // unexpected and gets the generic treatment rather than crashing the handler.
-      return { type: 'unknown' };
   }
 }
 
@@ -110,7 +93,7 @@ async function handlePush(event: PushEvent): Promise<void> {
     const trigger = await db.triggers.get(triggerId);
     if (!trigger) return showFallback(triggerId);
 
-    const target = await resolveTarget(trigger);
+    const target = await resolveTriggerTarget(trigger);
     const settings = await loadSettings();
     const content = composeNotification({
       trigger,

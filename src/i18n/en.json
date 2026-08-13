@@ -9,6 +9,11 @@
     "entry": {
       "title": "Reminder"
     },
+    "person": {
+      "title": "Time to catch up with {{name}}",
+      "body": "It has been a while"
+    },
+    "withDetail": "{{main}} · {{detail}}",
     "fallback": {
       "title": "You have a reminder",
       "body": "Open ReMind to see it"

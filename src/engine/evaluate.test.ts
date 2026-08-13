@@ -36,23 +36,66 @@ describe('isSchedulable', () => {
     ).toBe(true);
   });
 
+  it('accepts cadence', () => {
+    const cadence: TriggerCondition = {
+      kind: 'cadence',
+      personId: 'p1',
+      days: 30,
+      atMinuteOfDay: 540,
+      timezone: 'UTC',
+    };
+    expect(isSchedulable(cadence)).toBe(true);
+  });
+
   it('rejects the kinds that do not', () => {
-    const cadence: TriggerCondition = { kind: 'cadence', personId: 'p1', days: 30 };
     const spaced: TriggerCondition = {
       kind: 'spaced',
       entryId: 'x1',
       ease: 2.5,
       intervalDays: 1,
       reps: 0,
+      lastReviewedAt: START,
+      atMinuteOfDay: 540,
+      timezone: 'UTC',
     };
-    expect(isSchedulable(cadence)).toBe(false);
     expect(isSchedulable(spaced)).toBe(false);
+  });
+});
+
+describe('desiredFireAt — cadence', () => {
+  it('delegates to the cadence rule, which needs the person and the clock', () => {
+    const person = {
+      id: 'p1',
+      name: 'Sarah',
+      aliases: [],
+      cadenceDays: 7,
+      lastInteractionAt: START,
+      createdAt: START,
+    };
+    const at = desiredFireAt(
+      { kind: 'cadence', personId: 'p1', days: 7, atMinuteOfDay: 9 * 60, timezone: 'UTC' },
+      { person },
+      START,
+    );
+
+    // START is 10 June 17:00Z; seven days on is 17 June, and 09:00 on that day is the slot.
+    expect(at).toBe(Date.UTC(2026, 5, 17, 9, 0));
+  });
+
+  it('returns null when the person has been deleted', () => {
+    expect(
+      desiredFireAt(
+        { kind: 'cadence', personId: 'p1', days: 7, atMinuteOfDay: 540, timezone: 'UTC' },
+        {},
+        START,
+      ),
+    ).toBeNull();
   });
 });
 
 describe('desiredFireAt — time', () => {
   it('is the stored instant', () => {
-    expect(desiredFireAt({ kind: 'time', at: START, timezone: 'UTC' }, undefined)).toBe(START);
+    expect(desiredFireAt({ kind: 'time', at: START, timezone: 'UTC' }, { event: undefined })).toBe(START);
   });
 });
 
@@ -68,36 +111,36 @@ describe('desiredFireAt — event-adjacent', () => {
   });
 
   it('fires before the event for a negative offset', () => {
-    expect(desiredFireAt(adjacent(-30), makeEvent())).toBe(START - 30 * MINUTE_MS);
+    expect(desiredFireAt(adjacent(-30), { event: makeEvent() })).toBe(START - 30 * MINUTE_MS);
   });
 
   it('fires after the event for a positive offset', () => {
-    expect(desiredFireAt(adjacent(15), makeEvent())).toBe(START + 15 * MINUTE_MS);
+    expect(desiredFireAt(adjacent(15), { event: makeEvent() })).toBe(START + 15 * MINUTE_MS);
   });
 
   it('fires at the event start for a zero offset', () => {
-    expect(desiredFireAt(adjacent(0), makeEvent())).toBe(START);
+    expect(desiredFireAt(adjacent(0), { event: makeEvent() })).toBe(START);
   });
 
   it('ignores the travel buffer unless asked to include it', () => {
     const event = makeEvent({ travelBufferMinutes: 45 });
-    expect(desiredFireAt(adjacent(-30), event)).toBe(START - 30 * MINUTE_MS);
+    expect(desiredFireAt(adjacent(-30), { event })).toBe(START - 30 * MINUTE_MS);
   });
 
   it('subtracts the travel buffer on top of the offset', () => {
     // "Half an hour before I need to leave", where leaving takes 45 minutes.
     const event = makeEvent({ travelBufferMinutes: 45 });
-    expect(desiredFireAt(adjacent(-30, true), event)).toBe(START - 75 * MINUTE_MS);
+    expect(desiredFireAt(adjacent(-30, true), { event })).toBe(START - 75 * MINUTE_MS);
   });
 
   it('always shifts earlier, even for an offset after the event', () => {
     const event = makeEvent({ travelBufferMinutes: 45 });
-    expect(desiredFireAt(adjacent(15, true), event)).toBe(START - 30 * MINUTE_MS);
+    expect(desiredFireAt(adjacent(15, true), { event })).toBe(START - 30 * MINUTE_MS);
   });
 
   it('returns null when the event has gone, rather than guessing a time', () => {
     // Deleted, or lost to a partial import. The caller deactivates the trigger.
-    expect(desiredFireAt(adjacent(-30), undefined)).toBeNull();
-    expect(desiredFireAt(adjacent(-30, true), undefined)).toBeNull();
+    expect(desiredFireAt(adjacent(-30), { event: undefined })).toBeNull();
+    expect(desiredFireAt(adjacent(-30, true), { event: undefined })).toBeNull();
   });
 });

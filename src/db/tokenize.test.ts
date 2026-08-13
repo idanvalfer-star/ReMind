@@ -44,10 +44,8 @@ describe('tokenize — English', () => {
     ]);
   });
 
-  it('elides apostrophes so possessives and contractions collapse', () => {
-    expect(tokenize("Sarah's vase")).toEqual(['sarahs', 'vase']);
+  it('elides apostrophes inside contractions so they collapse to one token', () => {
     expect(tokenize("Don't forget")).toEqual(['dont', 'forget']);
-    expect(tokenize('Sarah’s vase')).toEqual(['sarahs', 'vase']);
   });
 
   it('deduplicates while preserving first-seen order', () => {
@@ -128,5 +126,37 @@ describe('tokenize — mixed script', () => {
     // A query for the bare stem is a subset of what indexing produced, which is what
     // makes `anyOf(tokenize(query))` find the prefixed original.
     expect(tokenize(text)).toContain(tokenize(HE.jerusalem)[0]);
+  });
+});
+
+describe('English possessives', () => {
+  it('indexes the name, not the name plus s', () => {
+    // Eliding the apostrophe on its own yields "sarahs", which loses the name a note is
+    // about: searching "Sarah" would not find "Sarah's birthday".
+    expect(tokenize("Sarah's birthday")).toEqual(['sarah', 'birthday']);
+  });
+
+  it('handles a curly apostrophe, which is what phone keyboards produce', () => {
+    expect(tokenize('Sarah’s birthday')).toEqual(['sarah', 'birthday']);
+  });
+
+  it('leaves contractions that are not possessives alone', () => {
+    expect(tokenize("don't forget")).toEqual(['dont', 'forget']);
+  });
+
+  it('strips a possessive mid-sentence, not just at the end', () => {
+    expect(tokenize("Alex's car is at Dan's place")).toEqual([
+      'alex',
+      'car',
+      'is',
+      'at',
+      'dan',
+      'place',
+    ]);
+  });
+
+  it('does not touch a Hebrew geresh, where the same shape is an abbreviation', () => {
+    // The rule requires a preceding Latin letter precisely so this keeps working.
+    expect(tokenize('צה״ל')).toEqual(['צהל']);
   });
 });

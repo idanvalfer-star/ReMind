@@ -7,14 +7,19 @@
  * offline, and everything belonging to a user who never granted notification permission.
  */
 
-import { db, type Entry, type EpochMs, type Event, type Trigger } from '../db/schema';
+import { db, type Entry, type EpochMs, type Trigger } from '../db/schema';
+import type { NotificationTarget } from './notify';
+import { resolveTriggerTarget } from './target';
 import { localDayKey, startOfNextLocalDay } from './time';
 import type { IanaTz } from '../db/schema';
 
 export interface TodayItem {
   trigger: Trigger;
-  /** What the trigger points at, if it still exists. */
-  target: { type: 'event'; event: Event } | { type: 'entry'; entry: Entry } | { type: 'unknown' };
+  /**
+   * What the trigger points at, if it still exists. The same shape the notification composer
+   * takes, so the screen and the push cannot describe a reminder differently.
+   */
+  target: NotificationTarget;
   /** True when the fire time has passed but nothing has been delivered. */
   overdue: boolean;
 }
@@ -41,18 +46,11 @@ export async function todayItems(timezone: IanaTz, now: EpochMs = Date.now()): P
     due
       // The index range starts at 0, so filter to the local day rather than all of history.
       .filter((trigger) => localDayKey(trigger.nextFireAt as EpochMs, timezone) === today)
-      .map(async (trigger): Promise<TodayItem> => {
-        const overdue = (trigger.nextFireAt as EpochMs) <= now && trigger.lastFiredAt === null;
-        if (trigger.targetType === 'event') {
-          const event = await db.events.get(trigger.targetId);
-          return { trigger, target: event ? { type: 'event', event } : { type: 'unknown' }, overdue };
-        }
-        if (trigger.targetType === 'entry') {
-          const entry = await db.entries.get(trigger.targetId);
-          return { trigger, target: entry ? { type: 'entry', entry } : { type: 'unknown' }, overdue };
-        }
-        return { trigger, target: { type: 'unknown' }, overdue };
-      }),
+      .map(async (trigger): Promise<TodayItem> => ({
+        trigger,
+        target: await resolveTriggerTarget(trigger),
+        overdue: (trigger.nextFireAt as EpochMs) <= now && trigger.lastFiredAt === null,
+      })),
   );
 
   return items.sort((a, b) => (a.trigger.nextFireAt ?? 0) - (b.trigger.nextFireAt ?? 0));

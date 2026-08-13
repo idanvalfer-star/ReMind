@@ -9,6 +9,11 @@
     "entry": {
       "title": "תזכורת"
     },
+    "person": {
+      "title": "הגיע הזמן לדבר עם {{name}}",
+      "body": "עבר זמן מאז הפעם האחרונה"
+    },
+    "withDetail": "{{main}} · {{detail}}",
     "fallback": {
       "title": "יש לך תזכורת",
       "body": "פתח את ReMind כדי לראות"

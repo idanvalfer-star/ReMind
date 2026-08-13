@@ -10,7 +10,7 @@
  * full i18n runtime, and injecting the lookup keeps this pure and testable.
  */
 
-import type { Entry, Event, Lang, Trigger } from '../db/schema';
+import type { Entry, Event, Fact, FactKind, Lang, Person, Trigger } from '../db/schema';
 
 /** Minimal translator shape, satisfied by i18next's `t` and by a plain lookup in the SW. */
 export type Translate = (key: string, vars?: Record<string, string | number>) => string;
@@ -23,8 +23,19 @@ export type Translate = (key: string, vars?: Record<string, string | number>) =>
  * something generic has to be shown.
  */
 export type NotificationTarget =
-  | { type: 'event'; event: Event }
+  | {
+      type: 'event';
+      event: Event;
+      /**
+       * People the event appears to involve, with facts already ranked. Present so a meeting
+       * reminder can carry something useful rather than only a time — the whole point of the
+       * app is the right fragment at the right moment, and ten minutes before you meet someone
+       * is the moment.
+       */
+      attendees?: readonly { person: Person; facts: readonly Fact[] }[] | undefined;
+    }
   | { type: 'entry'; entry: Entry }
+  | { type: 'person'; person: Person; facts: readonly Fact[] }
   | { type: 'unknown' };
 
 export interface NotificationContent {
@@ -35,6 +46,37 @@ export interface NotificationContent {
    * instead of stacking a second copy of the same reminder.
    */
   tag: string;
+}
+
+/**
+ * How useful each kind of fact is when there is only room for one.
+ *
+ * A milestone is the best conversation opener there is — it is news, and it dates. A preference
+ * is what makes a meeting go well. A gift idea only matters near an occasion, and the app has no
+ * way to know one is near. `relation` and `misc` are context rather than prompts.
+ */
+const FACT_KIND_WEIGHT: Record<FactKind, number> = {
+  milestone: 5,
+  preference: 4,
+  'gift-idea': 3,
+  relation: 2,
+  misc: 1,
+};
+
+/**
+ * Facts ordered by how worth surfacing they are. Stable and pure, so both the one-line
+ * notification and the full pre-meeting briefing agree on what matters most.
+ *
+ * Confidence breaks ties within a kind, and recency breaks ties within that: a preference
+ * recorded last week supersedes one from two years ago, which is usually how preferences work.
+ */
+export function rankFacts(facts: readonly Fact[]): Fact[] {
+  return [...facts].sort(
+    (a, b) =>
+      FACT_KIND_WEIGHT[b.kind] - FACT_KIND_WEIGHT[a.kind] ||
+      b.confidence - a.confidence ||
+      b.createdAt - a.createdAt,
+  );
 }
 
 /** Long bodies get truncated by the OS anyway, and mid-word is uglier than an ellipsis. */
@@ -91,11 +133,19 @@ export function composeNotification({
       }
       // Separate keys rather than substituting "all day" into the timed phrasing, which
       // would read "Starts at all day".
+      const when = event.isAllDay
+        ? t('notify.event.allDayBody')
+        : t('notify.event.body', { time: formatTime(event.startAt, event.timezone, locale) });
+
+      // One fact, from the first attendee who has any. Two would turn a glanceable reminder
+      // into a briefing document, and the notification body is a single line on a lock screen.
+      const detail = target.attendees?.flatMap((a) => a.facts)[0];
+
       return {
         title: truncate(event.title),
-        body: event.isAllDay
-          ? t('notify.event.allDayBody')
-          : t('notify.event.body', { time: formatTime(event.startAt, event.timezone, locale) }),
+        body: detail
+          ? truncate(t('notify.withDetail', { main: when, detail: detail.body }))
+          : when,
         tag,
       };
     }
@@ -106,6 +156,18 @@ export function composeNotification({
         body: truncate(target.entry.body),
         tag,
       };
+
+    case 'person': {
+      // The name goes in the title so the notification is identifiable at a glance, and the
+      // body carries something to actually say — a nudge that only says "check in with Sarah"
+      // is a chore, one that reminds you she just moved is a reason.
+      const best = rankFacts(target.facts)[0];
+      return {
+        title: t('notify.person.title', { name: truncate(target.person.name, 40) }),
+        body: best ? truncate(best.body) : t('notify.person.body'),
+        tag,
+      };
+    }
 
     case 'unknown':
       // Data cleared, or a push for a trigger this device no longer knows about.
@@ -127,6 +189,9 @@ export const NOTIFICATION_KEYS = [
   'notify.event.allDayBody',
   'notify.event.body',
   'notify.entry.title',
+  'notify.person.title',
+  'notify.person.body',
+  'notify.withDetail',
   'notify.fallback.title',
   'notify.fallback.body',
 ] as const;

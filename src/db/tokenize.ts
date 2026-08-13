@@ -10,8 +10,10 @@
  *
  * - **Niqqud** (vowel points) are separate codepoints, so pointed and unpointed
  *   spellings of the same word must collapse to one token.
- * - **Geresh / gershayim** punctuate acronyms and abbreviations. Stripping them also
- *   disposes of English possessives, so one rule serves both languages.
+ * - **Geresh / gershayim** punctuate acronyms and abbreviations, so they are elided rather
+ *   than treated as separators: `צה״ל` has to index as one term.
+ * - **English possessives** are removed before that elision, because eliding alone would turn
+ *   "Sarah's" into `sarahs` and lose the name.
  * - **Maqaf** (U+05BE) is a hyphen: it separates words rather than joining them.
  * - **Prefix particles** — bet, lamed, kaf, mem, he, shin, vav — attach directly to the
  *   following word, so "in Jerusalem" is a single token in Hebrew. Without stripping
@@ -32,6 +34,16 @@ const HEBREW_MARKS = /[֑-ׇֽֿׁׂׅׄ]/g;
 const HEBREW_SEPARATORS = /[־׀׃׆]/g;
 /** Geresh U+05F3, gershayim U+05F4, plus the straight/curly quotes standing in for them. */
 const ELIDED_PUNCTUATION = /[׳״'"‘’“”]/g;
+/**
+ * An English possessive ending a word: the `'s` in "Sarah's".
+ *
+ * Removed *before* the general elision, and this ordering is load-bearing. Eliding first
+ * would leave `sarahs`, which nobody searches for and which no longer matches the name it was
+ * written about — so a note saying "Sarah's birthday" would be invisible to a search for
+ * "Sarah". Restricted to a Latin letter followed by an ASCII or curly apostrophe so it cannot
+ * touch a Hebrew geresh, where the same shape is an abbreviation rather than a possessive.
+ */
+const ENGLISH_POSSESSIVE = /(?<=[a-z])['’]s(?![\p{L}\p{N}])/gu;
 /** Anything that is not a letter or a digit separates tokens. */
 const NON_WORD = /[^\p{L}\p{N}]+/u;
 
@@ -97,6 +109,7 @@ export function tokenize(text: string): string[] {
     .toLowerCase()
     .replace(HEBREW_SEPARATORS, ' ')
     .replace(HEBREW_MARKS, '')
+    .replace(ENGLISH_POSSESSIVE, '')
     .replace(ELIDED_PUNCTUATION, '');
 
   const seen = new Set<string>();

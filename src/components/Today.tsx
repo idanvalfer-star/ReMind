@@ -22,13 +22,15 @@ export interface TodayProps {
   timezone: string;
 }
 
-function label(item: TodayItem, fallback: string): string {
+function label(item: TodayItem, fallback: string, personLabel: (name: string) => string): string {
   switch (item.target.type) {
     case 'event':
       // A private event keeps its title off any surface that might be glanced at.
       return item.target.event.isPrivate ? fallback : item.target.event.title;
     case 'entry':
       return item.target.entry.body;
+    case 'person':
+      return personLabel(item.target.person.name);
     case 'unknown':
       return fallback;
   }
@@ -96,7 +98,11 @@ export function Today({ locale, timezone }: TodayProps) {
               {items.map((item) => (
                 <li key={item.trigger.id} className="item">
                   <span className="item__dot" data-overdue={item.overdue} aria-hidden="true" />
-                  <span className="item__title">{label(item, t('notify.entry.title'))}</span>
+                  <span className="item__title">
+                    {label(item, t('notify.entry.title'), (name) =>
+                      t('notify.person.title', { name }),
+                    )}
+                  </span>
                   <span className="item__time item__body">
                     {formatTime(item.trigger.nextFireAt ?? 0)}
                     {item.overdue ? ` · ${t('today.overdue')}` : ''}
