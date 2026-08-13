@@ -205,6 +205,101 @@ log(
 );
 await page.screenshot({ path: `${OUT}/15-today-briefing.png` });
 
+// ---------------------------------------------------------------- trips and packing
+await page.locator('.tabbar__tab', { hasText: 'Trips' }).click();
+await page.waitForTimeout(600);
+log(/No trips yet/i.test((await page.locator('main').textContent()) ?? ''), 'trips starts empty');
+
+await page.locator('button', { hasText: 'Plan a trip' }).click();
+await page.waitForTimeout(300);
+await page.fill('.field__input >> nth=0', 'Lisbon');
+await page.locator('button', { hasText: 'Flying' }).click();
+await page.locator('.followup--sheet button', { hasText: 'Save' }).click();
+await page.waitForTimeout(1200);
+
+const tripList = (await page.locator('main').textContent()) ?? '';
+log(/Lisbon/.test(tripList), 'the trip appears in the list', tripList.trim().slice(0, 80));
+await page.screenshot({ path: `${OUT}/19-trips-list.png` });
+
+await page.locator('.person-row').first().click();
+await page.waitForTimeout(900);
+const tripDetail = (await page.locator('main').textContent()) ?? '';
+log(/Passport/i.test(tripDetail), 'a flight generates a passport line', tripDetail.trim().slice(0, 100));
+log(/Documents/i.test(tripDetail), 'items are grouped by category');
+log(/Before you come home/i.test(tripDetail), 'a return checklist is generated');
+log(/Unplug the chargers/i.test(tripDetail), 'the return list is about leaving nothing behind');
+await page.screenshot({ path: `${OUT}/20-trip-detail.png` });
+
+// Quantities must scale: four nights means five pairs of socks, not one.
+const socksRow = await page
+  .locator('.item', { hasText: 'Socks' })
+  .first()
+  .textContent();
+log(/×\d/.test(socksRow ?? ''), 'clothing quantities scale with the trip', (socksRow ?? '').trim());
+
+// Ticking. `click` rather than `check`: the checkbox is controlled by an IndexedDB round trip, and
+// `check` asserts the state flipped synchronously, which it cannot.
+await page.locator("input[aria-label='Socks']").click();
+await page.waitForTimeout(900);
+const ticked = await page.locator("[data-packed='true']").count();
+log(ticked >= 1, 'an item can be ticked off', `${ticked} ticked`);
+
+// Ticked deliberately, to pin the rule that a packed item survives a regeneration that would
+// otherwise drop it. "Travel adapter" is left alone as the control: also air-only, but untouched.
+await page.locator("input[aria-label='Passport']").click();
+await page.waitForTimeout(700);
+
+// A manual addition must be marked as such — that is what the learning reads from.
+await page.fill('.followup--sheet .field__input >> nth=0', 'Snorkel');
+await page.locator('.followup--sheet button', { hasText: 'Save' }).first().click();
+await page.waitForTimeout(800);
+const withManual = (await page.locator('main').textContent()) ?? '';
+log(/Snorkel/.test(withManual), 'a manual item can be added');
+log(/you added this/i.test(withManual), 'the manual item says where it came from');
+await page.screenshot({ path: `${OUT}/21-trip-packing.png` });
+
+// Stage reminders. Four stages, all going through the engine's quiet hours and cap.
+await page.locator('button', { hasText: 'Set packing reminders' }).click();
+await page.waitForTimeout(1000);
+const withReminders = (await page.locator('main').textContent()) ?? '';
+log(/Reminders set/i.test(withReminders), 'packing reminders can be armed');
+log(/The night before/i.test(withReminders), 'the stages are named rather than counted');
+
+const tripTriggers = await page.evaluate(async () => {
+  const open = indexedDB.open('remind');
+  const dbh = await new Promise((res, rej) => {
+    open.onsuccess = () => res(open.result);
+    open.onerror = () => rej(open.error);
+  });
+  const rows = await new Promise((res, rej) => {
+    const req = dbh.transaction('triggers').objectStore('triggers').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return rows.filter((r) => r.targetType === 'trip' && r.active === 1).length;
+});
+log(tripTriggers >= 2, 'stage reminders reached the trigger table', `${tripTriggers} armed`);
+await page.screenshot({ path: `${OUT}/22-trip-reminders.png` });
+
+// Editing the trip regenerates the list, and must not undo the tick or drop the manual item.
+await page.locator('button', { hasText: 'Edit' }).click();
+await page.waitForTimeout(400);
+await page.locator('.followup--sheet button', { hasText: 'Driving' }).click();
+await page.locator('.followup--sheet button', { hasText: 'Save' }).click();
+// Saving an edit returns to the trip that was being edited, not to the list.
+await page.waitForTimeout(1400);
+const afterEdit = (await page.locator('main').textContent()) ?? '';
+log(!/Travel adapter/i.test(afterEdit), 'switching to a road trip drops an air-only line');
+log(/Driving licence/i.test(afterEdit), 'and adds a driving licence');
+log(/Snorkel/.test(afterEdit), 'a regeneration keeps what the user added by hand');
+// The deliberate rule: something already in the bag is not removed because the trip changed shape.
+log(/Passport/i.test(afterEdit), 'a ticked line survives even when it stops being applicable');
+log(
+  (await page.locator("[data-packed='true']").count()) >= 2,
+  'a regeneration keeps everything that was already ticked',
+);
+await page.screenshot({ path: `${OUT}/23-trip-after-edit.png` });
+
 // ---------------------------------------------------------------- location pins
 // Geolocation is granted and stubbed to a fixed point, because the whole feature is a comparison
 // between two coordinates and the interesting question is whether the round trip through IndexedDB

@@ -16,7 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 
 /** Bumped whenever `stores()` changes. Also stamped into JSON exports. */
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 
 // ---------------------------------------------------------------- primitives
 
@@ -133,7 +133,37 @@ export interface Fact {
   createdAt: EpochMs;
 }
 
-// ---------------------------------------------------------------- trips (declared, not yet used)
+// ---------------------------------------------------------------- trips
+
+export type TransitMode = 'air' | 'rail' | 'road' | 'sea' | 'mixed';
+
+export const TRANSIT_MODES: readonly TransitMode[] = ['air', 'rail', 'road', 'sea', 'mixed'] as const;
+
+/** One day of a destination forecast, as Open-Meteo returns it. */
+export interface ForecastDay {
+  /** `YYYY-MM-DD` local to the destination, which is how the API keys its daily series. */
+  date: string;
+  minC: number;
+  maxC: number;
+  precipMm: number;
+}
+
+/**
+ * A cached destination forecast.
+ *
+ * Cached on the Trip rather than fetched on render, because it is the only network call in the whole
+ * app and it must be a thing the user chose to do once — not something that happens every time a
+ * screen appears. See PRIVACY.md.
+ */
+export interface Forecast {
+  fetchedAt: EpochMs;
+  /** Resolved by Open-Meteo's geocoder, kept so a refresh needs no second name lookup. */
+  latitude: number;
+  longitude: number;
+  /** What the geocoder actually matched, which may not be what was typed. */
+  resolvedName: string;
+  days: ForecastDay[];
+}
 
 export interface Trip {
   id: ID;
@@ -141,9 +171,35 @@ export interface Trip {
   startAt: EpochMs;
   endAt: EpochMs;
   purpose: string;
-  transitMode: 'air' | 'rail' | 'road' | 'sea' | 'mixed';
+  transitMode: TransitMode;
   luggageConstraint: string | null;
+  /** The zone the *traveller* is in when packing, so stage reminders land at sane local hours. */
+  timezone: IanaTz;
+  /** Null until the user explicitly asks for a forecast. */
+  forecast: Forecast | null;
+  createdAt: EpochMs;
+  updatedAt: EpochMs;
 }
+
+export type PackCategory = 'documents' | 'clothing' | 'toiletries' | 'tech' | 'health' | 'misc';
+
+export const PACK_CATEGORIES: readonly PackCategory[] = [
+  'documents',
+  'clothing',
+  'toiletries',
+  'tech',
+  'health',
+  'misc',
+] as const;
+
+/**
+ * Why an item is on the list.
+ *
+ * Stored because a generated packing list is only trustworthy if it can say where each line came
+ * from. "Umbrella" is reasonable when the forecast says rain and baffling otherwise, and a list you
+ * cannot interrogate is one you stop reading.
+ */
+export type PackOrigin = 'template' | 'weather' | 'learned' | 'manual';
 
 export interface PackItem {
   id: ID;
@@ -152,6 +208,9 @@ export interface PackItem {
   quantity: number;
   packed: 0 | 1;
   isReturnLeg: 0 | 1;
+  category: PackCategory;
+  origin: PackOrigin;
+  createdAt: EpochMs;
 }
 
 // ---------------------------------------------------------------- resurfacing
@@ -373,6 +432,15 @@ export class ReMindDB extends Dexie {
       // regardless of when it is due, and Dexie cannot query a prefix of a compound index.
       triggers:
         'id, active, [active+nextFireAt], nextFireAt, kind, [targetType+targetId], snoozedUntil, lastFiredAt',
+    });
+
+    // v3 — trips and packing. Again indexes only; `trips` and `packItems` were unwritable before
+    // this, so the new required fields need no backfill.
+    this.version(3).stores({
+      trips: 'id, startAt, endAt, [startAt+endAt], destination, createdAt',
+      // `[tripId+isReturnLeg]` is the list query: the outbound list and the return checklist are
+      // separate screens over one table, and neither should filter the other in memory.
+      packItems: 'id, tripId, [tripId+isReturnLeg], [tripId+category], packed, isReturnLeg, label',
     });
   }
 }

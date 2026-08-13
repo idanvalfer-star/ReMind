@@ -84,3 +84,15 @@ export function PeopleIcon({ size = 22 }: IconProps) {
     </svg>
   );
 }
+
+export function TripIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      {/* A suitcase: body, handle, and the two catches. Not a plane — trips here are also trains
+          and cars, and a plane would misdescribe most of them. */}
+      <rect x="3" y="7.5" width="18" height="12.5" rx="2.5" />
+      <path d="M9 7.5V5.5a1.5 1.5 0 011.5-1.5h3A1.5 1.5 0 0115 5.5v2" />
+      <path d="M8.5 11v6M15.5 11v6" />
+    </svg>
+  );
+}

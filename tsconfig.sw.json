@@ -41,6 +41,7 @@
     "src/db",
     "src/engine",
     "src/people",
+    "src/trips",
     "src/i18n/resources.ts",
     "src/shared"
   ],

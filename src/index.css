@@ -681,3 +681,28 @@ input[type='range']:focus-visible {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---------------------------------------------------------------- packing */
+
+/*
+ * A ticked item stays legible rather than being greyed into illegibility: you still need to read the
+ * list to check it, and a strikethrough at 40% opacity defeats that.
+ */
+.item__title[data-packed='true'] {
+  color: var(--text-dim);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
+/* Why a line is on the list. Small and dim — available on inspection, not competing with the item. */
+.pack-origin {
+  font-size: 0.72rem;
+  font-weight: 400;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* The packing list nests category groups inside a card, so its labels need less space above. */
+.card .section-label {
+  margin-block: 0.7rem 0.3rem;
+}

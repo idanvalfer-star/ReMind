@@ -10,6 +10,7 @@
 
 import { db, type Event, type Trigger } from '../db/schema';
 import { buildBriefing, groupFactsByPerson, type PersonFacts } from '../people/briefing';
+import { stageIdAt } from '../trips/stages';
 import type { NotificationTarget } from './notify';
 
 /**
@@ -40,6 +41,15 @@ export async function resolveTriggerTarget(trigger: Trigger): Promise<Notificati
       // through IndexedDB gets everything it needs.
       const facts = await db.facts.where('personId').equals(person.id).toArray();
       return { type: 'person', person, facts };
+    }
+
+    case 'trip': {
+      const trip = await db.trips.get(trigger.targetId);
+      if (!trip) return { type: 'unknown' };
+      // The stage is derived from the trip's *current* dates and this trigger's fire time, so
+      // moving a trip re-labels its pending reminders instead of leaving them lying about the day.
+      const at = trigger.nextFireAt ?? trigger.lastFiredAt ?? Date.now();
+      return { type: 'trip', trip, stage: stageIdAt(trip, at) };
     }
 
     default:

@@ -508,3 +508,118 @@ Two rules, enforced by construction rather than by care:
    it the on-open half is simply skipped and pinning still works.
 
 For a user who never pins anything, the entire feature costs one indexed read at launch.
+
+---
+
+# Phase 3 — Trips and packing
+
+## The packing template is data, and every line carries its reason
+
+`template.ts` is a list of records, not a function with branches. Reading it should be enough to
+predict any list the app will generate — which matters because a generated checklist is only useful
+if you can tell when it is wrong.
+
+`PackItem.origin` (`template` | `weather` | `learned` | `manual`) is stored for the same reason and
+shown in the UI. "Umbrella" is sensible when the forecast says rain and baffling otherwise; a list you
+cannot interrogate is one you stop reading, and then it may as well not exist.
+
+## Quantities scale, with a spare and a cap
+
+Clothing lines carry `perNight`; everything else is one regardless of length, because you take one
+charger whether you are away for two nights or ten. Scaled quantities get `ceil(nights × rate) + 1` —
+the failure people actually hit is being one short — and cap at ten, past which you are doing laundry
+rather than packing more.
+
+## Weather decides on extremes, not averages
+
+One cold night on an otherwise mild week still means taking the coat. `weatherItems` looks at the
+minimum, maximum and wettest day across the whole trip; averaging is how you end up cold. The
+thresholds are chosen for what changes a bag rather than for meteorological significance: 27°C is when
+sun protection stops being optional, 6°C is when a coat is a different coat, 2mm in a day is the
+difference between damp and wet.
+
+## Learning reads only manual, packed, outbound items
+
+`learnedEssentials` counts an item only if the user **added it themselves**, **ticked it**, and it was
+on the outbound list — and counts **distinct trips**, not rows.
+
+Each of those exclusions is load-bearing:
+
+- **Manual only.** Learning from generated lines means learning from the generator, which converges on
+  whatever it happened to suggest first. The suggestion would then justify itself forever.
+- **Packed only.** An item generated or added and then never ticked is evidence *against* it. Without
+  this, a list grows monotonically and never sheds a bad idea.
+- **Distinct trips.** Three rows on one trip is one data point.
+
+## The return checklist is a different list, not the same one re-ticked
+
+Going home, the risk inverts: it is not forgetting to bring something, it is leaving something behind.
+So the return list is about chargers in walls, toiletries in bathrooms, and hotel safes — and it lives
+under a separate `isReturnLeg` flag with its own progress count, which is why `[tripId+isReturnLeg]` is
+an index rather than an in-memory filter.
+
+## Regeneration preserves anything the user touched
+
+Editing a trip regenerates the generated part of its list — more nights means more socks, a drive
+instead of a flight means no passport. But a row that was **ticked** or **added by hand** is never
+removed, and ticked state survives by label so lengthening a trip does not silently unpack the bag.
+
+The consequence is deliberate and looked wrong the first time a test caught it: a ticked passport
+survives a switch to a road trip. That is correct. The tick means the passport is in the bag, and
+removing it from the list because the transit mode changed would be the app overruling something the
+user physically did.
+
+## Stage reminders are four different jobs, not one alarm repeated
+
+Packing fails at specific moments: a week out, while there is still time to buy what you do not own;
+the night before, while there is still time to do laundry; the morning of, while the passport is still
+on the desk; and the evening before you come home, while the charger is still in the wall. Each stage
+has its own hour chosen so the reminder can still be *acted on*.
+
+Two guards worth naming:
+
+- A stage in the past is dropped rather than fired late.
+- A stage must land before the moment it prepares you for, so a 06:00 flight gets no 07:00 reminder to
+  check the passport. Written once against the stage's own anchor rather than per-arm — the
+  `anchor === 'end'` version of that check turned out to be unreachable, which a test exposed, and two
+  branches where one expression is correct is worse than dead code.
+
+## The stage is derived from the fire time, not stored on the trigger
+
+`stageIdAt(trip, at)` recomputes which stage a reminder is by matching its instant against the trip's
+*current* dates. The alternative — a stage id on the trigger — goes stale the moment the trip moves,
+leaving a notification that says "leaving today" on a day that is no longer departure.
+
+The honest `null` case falls out of this for free: a trip that moved so far no stage matches gets
+neutral text naming the destination, rather than a confident lie.
+
+This is also why the UI lists `armedStages(tripId)` rather than all four stage names. A trip booked six
+days out has no week-before nudge, and a card promising one the user will never receive is a lie they
+discover by not being reminded.
+
+## Open-Meteo, and it is opt-in per trip
+
+Genuinely free, no key, no account — which almost no other weather API manages, and which the brief
+requires. But it is still the only request this app makes to anything but its own backend, so it
+happens on an explicit tap, per trip, and the forecast card doubles as the disclosure of what gets
+sent. See PRIVACY.md.
+
+Two failure modes are distinguished rather than collapsed: "that place could not be found" is the
+user's to fix, "the service is unreachable" is not.
+
+## Generated labels are stored resolved, not as keys
+
+`generatePackList` takes a translator and stores the resolved string. A list generated in Hebrew stays
+in Hebrew if the app language later changes.
+
+That is deliberate. Once generated, a pack list is the user's own data — they rename lines, delete
+some, add their own — and re-translating text someone has edited would either destroy the edit or
+require tracking which lines are still pristine. It behaves the way a captured note behaves.
+
+## A note on one test-harness discovery
+
+Playwright's `.check()` failed on the packing checkboxes with "clicking the checkbox did not change
+its state". It looked like a bug in the toggle, and was not: the input is controlled by an IndexedDB
+round trip, and `.check()` asserts the state flipped synchronously. A direct probe confirmed the write
+(0 → 1 in the store, the DOM following). `.click()` plus an assertion on the rendered state is the
+correct harness for an async-controlled input.

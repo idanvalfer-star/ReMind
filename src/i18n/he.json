@@ -17,6 +17,28 @@
     "fallback": {
       "title": "יש לך תזכורת",
       "body": "פתח את ReMind כדי לראות"
+    },
+    "trip": {
+      "shop": {
+        "title": "{{destination}} בעוד שבוע",
+        "body": "יש משהו לקנות או לשאול לפני?"
+      },
+      "night-before": {
+        "title": "לארוז ל{{destination}}",
+        "body": "אתה יוצא מחר."
+      },
+      "departure-day": {
+        "title": "יוצא ל{{destination}} היום",
+        "body": "בדיקה אחרונה לפני היציאה."
+      },
+      "return-eve": {
+        "title": "חוזר הביתה מחר",
+        "body": "מטענים, אמבטיה, הכספת."
+      },
+      "generic": {
+        "title": "{{destination}}",
+        "body": "פתח את ReMind לרשימת האריזה."
+      }
     }
   },
   "today": {
@@ -67,7 +89,8 @@
     "calendar": "יומן",
     "people": "אנשים",
     "search": "חיפוש",
-    "settings": "הגדרות"
+    "settings": "הגדרות",
+    "trips": "נסיעות"
   },
   "people": {
     "heading": "אנשים",
@@ -188,5 +211,110 @@
     "here": "בדיוק כאן",
     "denied": "המיקום כבוי, ולכן פתקים שסימנת למקום לא יופיעו. אפשר להפעיל אותו בהגדרות הדפדפן.",
     "unavailable": "לא הצלחנו לקבל מיקום כרגע."
+  },
+  "packing": {
+    "item": {
+      "passport": "דרכון",
+      "tickets": "כרטיסים וכרטיסי עלייה",
+      "wallet": "ארנק וכרטיסים",
+      "insurance": "פרטי ביטוח נסיעות",
+      "licence": "רישיון נהיגה",
+      "underwear": "תחתונים",
+      "socks": "גרביים",
+      "tops": "חולצות",
+      "trousers": "מכנסיים",
+      "sleepwear": "משהו לישון בו",
+      "shoes": "נעליים נוספות",
+      "toothbrush": "מברשת ומשחת שיניים",
+      "toiletries": "כלי רחצה",
+      "liquidsBag": "נוזלים בשקית שקופה",
+      "phoneCharger": "מטען לטלפון",
+      "powerBank": "סוללה נטענת",
+      "adapter": "מתאם חשמל",
+      "headphones": "אוזניות",
+      "medication": "תרופות",
+      "snacks": "חטיפים לדרך",
+      "waterBottle": "בקבוק מים",
+      "sunscreen": "קרם הגנה",
+      "sunhat": "כובע לשמש",
+      "sunglasses": "משקפי שמש",
+      "sweater": "סוודר",
+      "warmCoat": "מעיל חם",
+      "gloves": "כפפות",
+      "warmHat": "כובע חם",
+      "umbrella": "מטרייה",
+      "rainJacket": "מעיל גשם",
+      "returnChargers": "לנתק את המטענים",
+      "returnBathroom": "לפנות את חדר האמבטיה",
+      "returnSafe": "לבדוק את הכספת",
+      "returnWardrobe": "לבדוק את הארון והמגירות",
+      "returnLaundry": "לארוז את הכבסים",
+      "returnPurchases": "כל מה שקנית"
+    },
+    "category": {
+      "documents": "מסמכים",
+      "clothing": "בגדים",
+      "toiletries": "רחצה",
+      "tech": "אלקטרוניקה",
+      "health": "בריאות",
+      "misc": "אחר"
+    },
+    "origin": {
+      "template": "רגיל",
+      "weather": "לפי התחזית",
+      "learned": "אתה תמיד לוקח",
+      "manual": "הוספת בעצמך"
+    }
+  },
+  "trips": {
+    "heading": "נסיעות",
+    "add": "לתכנן נסיעה",
+    "empty": "עוד אין נסיעות. תכנן אחת וקבל רשימת אריזה.",
+    "destination": "לאן",
+    "destinationPlaceholder": "עיר או מקום",
+    "purpose": "בשביל מה",
+    "purposePlaceholder": "חופשה, עבודה, חתונה…",
+    "startLabel": "יציאה",
+    "endLabel": "חזרה",
+    "mode": "איך מגיעים",
+    "luggage": "מזוודות",
+    "luggagePlaceholder": "תיק יד בלבד, מזוודה אחת…",
+    "save": "שמור",
+    "cancel": "ביטול",
+    "edit": "עריכה",
+    "delete": "מחק",
+    "deleteConfirm": "למחוק את הנסיעה ואת רשימת האריזה?",
+    "back": "כל הנסיעות",
+    "mode_air": "טיסה",
+    "mode_rail": "רכבת",
+    "mode_road": "נהיגה",
+    "mode_sea": "הפלגה",
+    "mode_mixed": "מעורב",
+    "nights": "{{count}} לילות",
+    "oneNight": "לילה אחד",
+    "packing": "אריזה",
+    "returnList": "לפני החזרה הביתה",
+    "progress": "{{packed}} מתוך {{total}}",
+    "allPacked": "הכל ארוז",
+    "addItem": "להוסיף פריט",
+    "itemPlaceholder": "עוד משהו",
+    "forecast": "לקבל תחזית",
+    "forecastRefresh": "לרענן את התחזית",
+    "forecastFor": "{{place}}: {{min}}° עד {{max}}°",
+    "forecastWet": "צפוי גשם",
+    "forecastNone": "לא מצאנו את המקום הזה.",
+    "forecastFailed": "לא הצלחנו להגיע לשירות התחזית.",
+    "forecastSends": "זו הפעם היחידה ש-ReMind מדבר עם משהו מלבד שרת התזכורות שלו. נשלחים רק היעד והתאריכים.",
+    "reminders": "תזכורות אריזה",
+    "remindersOn": "תזכורות נקבעו",
+    "remindersOff": "בלי תזכורות",
+    "setReminders": "לקבוע תזכורות אריזה",
+    "clearReminders": "לכבות תזכורות",
+    "remindersSuppressed": "חלק מהתזכורות נדחו בגלל שעות השקט או המכסה היומית.",
+    "stage_shop": "שבוע לפני",
+    "stage_night-before": "בערב שלפני",
+    "stage_departure-day": "בבוקר היציאה",
+    "stage_return-eve": "בערב שלפני החזרה",
+    "past": "הסתיימה"
   }
 }

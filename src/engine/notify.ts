@@ -10,7 +10,8 @@
  * full i18n runtime, and injecting the lookup keeps this pure and testable.
  */
 
-import type { Entry, Event, Fact, FactKind, Lang, Person, Trigger } from '../db/schema';
+import type { Entry, Event, Fact, FactKind, Lang, Person, Trigger, Trip } from '../db/schema';
+import type { StageId } from '../trips/stages';
 
 /** Minimal translator shape, satisfied by i18next's `t` and by a plain lookup in the SW. */
 export type Translate = (key: string, vars?: Record<string, string | number>) => string;
@@ -36,6 +37,17 @@ export type NotificationTarget =
     }
   | { type: 'entry'; entry: Entry }
   | { type: 'person'; person: Person; facts: readonly Fact[] }
+  | {
+      type: 'trip';
+      trip: Trip;
+      /**
+       * Which of the four packing stages this is, recomputed from the trip's current dates rather
+       * than stored on the trigger — see `stageIdAt`. `null` when the trip moved far enough that the
+       * reminder no longer lines up with any stage, which gets neutral text instead of a confident
+       * lie about today being departure day.
+       */
+      stage: StageId | null;
+    }
   | { type: 'unknown' };
 
 export interface NotificationContent {
@@ -169,6 +181,18 @@ export function composeNotification({
       };
     }
 
+    case 'trip': {
+      const { trip, stage } = target;
+      // Neutral text for an unmatched stage: better a reminder that just names the trip than one
+      // confidently announcing a departure that has moved.
+      const key = stage ?? 'generic';
+      return {
+        title: truncate(t(`notify.trip.${key}.title`, { destination: trip.destination })),
+        body: t(`notify.trip.${key}.body`),
+        tag,
+      };
+    }
+
     case 'unknown':
       // Data cleared, or a push for a trigger this device no longer knows about.
       return {
@@ -192,6 +216,16 @@ export const NOTIFICATION_KEYS = [
   'notify.person.title',
   'notify.person.body',
   'notify.withDetail',
+  'notify.trip.shop.title',
+  'notify.trip.shop.body',
+  'notify.trip.night-before.title',
+  'notify.trip.night-before.body',
+  'notify.trip.departure-day.title',
+  'notify.trip.departure-day.body',
+  'notify.trip.return-eve.title',
+  'notify.trip.return-eve.body',
+  'notify.trip.generic.title',
+  'notify.trip.generic.body',
   'notify.fallback.title',
   'notify.fallback.body',
 ] as const;

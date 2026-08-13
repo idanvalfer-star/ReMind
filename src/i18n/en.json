@@ -17,6 +17,28 @@
     "fallback": {
       "title": "You have a reminder",
       "body": "Open ReMind to see it"
+    },
+    "trip": {
+      "shop": {
+        "title": "{{destination}} in a week",
+        "body": "Anything to buy or borrow before you go?"
+      },
+      "night-before": {
+        "title": "Packing for {{destination}}",
+        "body": "You leave tomorrow."
+      },
+      "departure-day": {
+        "title": "Leaving for {{destination}} today",
+        "body": "Last check before you go."
+      },
+      "return-eve": {
+        "title": "Coming home tomorrow",
+        "body": "Chargers, bathroom, the safe."
+      },
+      "generic": {
+        "title": "{{destination}}",
+        "body": "Open ReMind for your packing list."
+      }
     }
   },
   "today": {
@@ -67,7 +89,8 @@
     "calendar": "Calendar",
     "people": "People",
     "search": "Search",
-    "settings": "Settings"
+    "settings": "Settings",
+    "trips": "Trips"
   },
   "people": {
     "heading": "People",
@@ -188,5 +211,110 @@
     "here": "right here",
     "denied": "Location is off, so pinned notes cannot surface. You can turn it back on in your browser settings.",
     "unavailable": "Could not get a location fix just now."
+  },
+  "packing": {
+    "item": {
+      "passport": "Passport",
+      "tickets": "Tickets and boarding passes",
+      "wallet": "Wallet and cards",
+      "insurance": "Travel insurance details",
+      "licence": "Driving licence",
+      "underwear": "Underwear",
+      "socks": "Socks",
+      "tops": "Tops",
+      "trousers": "Trousers",
+      "sleepwear": "Something to sleep in",
+      "shoes": "Spare shoes",
+      "toothbrush": "Toothbrush and paste",
+      "toiletries": "Toiletries",
+      "liquidsBag": "Liquids in a clear bag",
+      "phoneCharger": "Phone charger",
+      "powerBank": "Power bank",
+      "adapter": "Travel adapter",
+      "headphones": "Headphones",
+      "medication": "Medication",
+      "snacks": "Snacks for the journey",
+      "waterBottle": "Water bottle",
+      "sunscreen": "Sunscreen",
+      "sunhat": "Sun hat",
+      "sunglasses": "Sunglasses",
+      "sweater": "Sweater",
+      "warmCoat": "Warm coat",
+      "gloves": "Gloves",
+      "warmHat": "Warm hat",
+      "umbrella": "Umbrella",
+      "rainJacket": "Waterproof jacket",
+      "returnChargers": "Unplug the chargers",
+      "returnBathroom": "Clear the bathroom",
+      "returnSafe": "Check the safe",
+      "returnWardrobe": "Check the wardrobe and drawers",
+      "returnLaundry": "Bag the laundry",
+      "returnPurchases": "Anything you bought"
+    },
+    "category": {
+      "documents": "Documents",
+      "clothing": "Clothing",
+      "toiletries": "Toiletries",
+      "tech": "Tech",
+      "health": "Health",
+      "misc": "Other"
+    },
+    "origin": {
+      "template": "standard",
+      "weather": "weather",
+      "learned": "you always take this",
+      "manual": "you added this"
+    }
+  },
+  "trips": {
+    "heading": "Trips",
+    "add": "Plan a trip",
+    "empty": "No trips yet. Plan one and get a packing list.",
+    "destination": "Where to",
+    "destinationPlaceholder": "City or place",
+    "purpose": "What for",
+    "purposePlaceholder": "Holiday, work, a wedding…",
+    "startLabel": "Leaving",
+    "endLabel": "Coming back",
+    "mode": "Getting there",
+    "luggage": "Luggage",
+    "luggagePlaceholder": "Cabin bag only, one case…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this trip and its packing list?",
+    "back": "All trips",
+    "mode_air": "Flying",
+    "mode_rail": "Train",
+    "mode_road": "Driving",
+    "mode_sea": "Boat",
+    "mode_mixed": "Mixed",
+    "nights": "{{count}} nights",
+    "oneNight": "1 night",
+    "packing": "Packing",
+    "returnList": "Before you come home",
+    "progress": "{{packed}} of {{total}}",
+    "allPacked": "All packed",
+    "addItem": "Add an item",
+    "itemPlaceholder": "Anything else",
+    "forecast": "Get the forecast",
+    "forecastRefresh": "Refresh the forecast",
+    "forecastFor": "{{place}}: {{min}}° to {{max}}°",
+    "forecastWet": "rain expected",
+    "forecastNone": "That place could not be found.",
+    "forecastFailed": "Could not reach the weather service.",
+    "forecastSends": "This is the only time ReMind talks to anything but its own reminder server. It sends the destination and dates, and nothing else.",
+    "reminders": "Packing reminders",
+    "remindersOn": "Reminders set",
+    "remindersOff": "No reminders",
+    "setReminders": "Set packing reminders",
+    "clearReminders": "Turn reminders off",
+    "remindersSuppressed": "Some reminders were refused by your quiet hours or daily cap.",
+    "stage_shop": "A week before",
+    "stage_night-before": "The night before",
+    "stage_departure-day": "Departure morning",
+    "stage_return-eve": "The evening before you return",
+    "past": "Finished"
   }
 }

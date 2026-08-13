@@ -60,6 +60,25 @@ The one control worth knowing about: reading your position happens **only** when
 or when you open the app while something is already pinned *and* you have already granted location
 permission. The app never asks for that permission on its own.
 
+### The one exception: destination weather
+
+Packing lists can use a weather forecast, and a forecast has to come from somewhere. **This is the
+only request ReMind ever makes to anything other than its own reminder backend**, and it happens only
+when you tap "Get the forecast" on a specific trip.
+
+What is sent, to [Open-Meteo](https://open-meteo.com):
+
+1. The destination text you typed, to their geocoder, so it can be turned into coordinates.
+2. Those coordinates and the trip's start and end dates, to their forecast endpoint.
+
+Nothing else — no packing list, no purpose, no identifier, no account. Open-Meteo requires no key and
+no sign-up, which is why it was chosen: there is nothing to attach the request to you with beyond
+your IP address, which any HTTP request reveals.
+
+If you would rather not, do not tap it. Every packing list works without a forecast; it simply omits
+the weather-driven lines, and each line it does add is labelled `weather` so you can see exactly what
+the forecast changed.
+
 ---
 
 ## What this *does* reveal

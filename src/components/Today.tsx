@@ -43,6 +43,8 @@ function label(
       return target.entry.body;
     case 'person':
       return personLabel(target.person.name);
+    case 'trip':
+      return target.trip.destination;
     case 'unknown':
       return fallback;
   }
