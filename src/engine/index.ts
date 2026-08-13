@@ -24,15 +24,11 @@ import {
   type Link,
   type LinkRelation,
   type Trigger,
+  type TriggerCondition,
   type TriggerResponse,
 } from '../db/schema';
 import { loadSettings } from '../db/settings';
-import {
-  desiredFireAt,
-  isSchedulable,
-  type SchedulableCondition,
-  type TriggerTargets,
-} from './evaluate';
+import { desiredFireAt, type TriggerTargets } from './evaluate';
 import { recordResponse } from './log';
 import { resolveFireTime, type ScheduleContext, type SuppressionReason } from './schedule';
 import {
@@ -47,7 +43,7 @@ import {
 export interface RegisterTriggerInput {
   targetType: EntityType;
   targetId: ID;
-  condition: SchedulableCondition;
+  condition: TriggerCondition;
   /** Optional edge to record alongside the trigger, e.g. entry → trigger. */
   link?: { fromType: EntityType; fromId: ID; relation: LinkRelation } | undefined;
   location?: Trigger['location'];
@@ -96,7 +92,7 @@ async function scheduleContext(excludeTriggerId?: ID): Promise<ScheduleContext> 
 }
 
 /** Fetches whatever the condition's evaluator needs, and nothing more. */
-async function triggerTargets(condition: SchedulableCondition): Promise<TriggerTargets> {
+async function triggerTargets(condition: TriggerCondition): Promise<TriggerTargets> {
   switch (condition.kind) {
     case 'time':
       return {};
@@ -104,6 +100,10 @@ async function triggerTargets(condition: SchedulableCondition): Promise<TriggerT
       return { event: await db.events.get(condition.eventId) };
     case 'cadence':
       return { person: await db.people.get(condition.personId) };
+    case 'spaced':
+      // The evaluator derives the due date from the condition alone; the Entry is fetched at
+      // notification time, not here.
+      return {};
   }
 }
 
@@ -320,12 +320,11 @@ async function triggersFor(targetType: EntityType, targetId: ID): Promise<Trigge
 async function recomputeAll(
   targetType: EntityType,
   targetId: ID,
-  kind: SchedulableCondition['kind'],
+  kind: TriggerCondition['kind'],
   targets: TriggerTargets,
 ): Promise<void> {
   for (const trigger of await triggersFor(targetType, targetId)) {
     if (!trigger.active || trigger.condition.kind !== kind) continue;
-    if (!isSchedulable(trigger.condition)) continue;
 
     const desired = desiredFireAt(trigger.condition, targets);
     if (desired === null) {

@@ -1,31 +1,17 @@
 /**
  * Turns a trigger's rule into the instant it *wants* to fire at, before quiet hours and
  * the daily cap get a say. `resolveFireTime` takes it from there.
- */
-
-import type { EpochMs, Event, Person, TriggerCondition } from '../db/schema';
-import { cadenceFireAt } from './cadence';
-import { MINUTE_MS } from './time';
-
-/**
- * The trigger kinds that have evaluators today.
  *
- * `spaced` is part of `TriggerCondition` so the union stays exhaustive, but it is excluded
- * here at the type level rather than handled with a runtime throw — that way adding it later
- * is a compile error at every call site instead of a surprise in production.
+ * Every `TriggerCondition` arm has an evaluator as of Phase 4. Earlier versions of this file carried
+ * a `SchedulableCondition` type narrowing the union to the implemented subset, so that adding an
+ * evaluator was a compile error at every call site rather than a surprise in production. It did its
+ * job and is gone: with the union complete it was a tautology, and a type guard that always returns
+ * true is worse than no guard, because it reads as if it were checking something.
  */
-export type SchedulableCondition = Extract<
-  TriggerCondition,
-  { kind: 'time' | 'event-adjacent' | 'cadence' }
->;
 
-export function isSchedulable(condition: TriggerCondition): condition is SchedulableCondition {
-  return (
-    condition.kind === 'time' ||
-    condition.kind === 'event-adjacent' ||
-    condition.kind === 'cadence'
-  );
-}
+import type { Entry, EpochMs, Event, Person, TriggerCondition } from '../db/schema';
+import { cadenceFireAt } from './cadence';
+import { atLocalMinutesOnDayOf, DAY_MS, MINUTE_MS } from './time';
 
 /**
  * Everything an evaluator might need, already fetched.
@@ -38,6 +24,7 @@ export function isSchedulable(condition: TriggerCondition): condition is Schedul
 export interface TriggerTargets {
   event?: Event | undefined;
   person?: Person | undefined;
+  entry?: Entry | undefined;
 }
 
 /**
@@ -55,7 +42,7 @@ export interface TriggerTargets {
  * has to be resolved against the present. The other arms ignore it.
  */
 export function desiredFireAt(
-  condition: SchedulableCondition,
+  condition: TriggerCondition,
   targets: TriggerTargets,
   now: EpochMs = Date.now(),
 ): EpochMs | null {
@@ -72,5 +59,15 @@ export function desiredFireAt(
 
     case 'cadence':
       return cadenceFireAt(condition, targets.person, now);
+
+    case 'spaced':
+      // Derived from the last review rather than stored, so changing the interval takes effect
+      // without a second write. Snapped to the digest hour, because a note due "in six days" should
+      // arrive with that morning's digest and not at whatever minute the last review was answered.
+      return atLocalMinutesOnDayOf(
+        condition.lastReviewedAt + condition.intervalDays * DAY_MS,
+        condition.timezone,
+        condition.atMinuteOfDay,
+      );
   }
 }

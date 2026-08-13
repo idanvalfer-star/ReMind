@@ -39,6 +39,10 @@
         "title": "{{destination}}",
         "body": "Open ReMind for your packing list."
       }
+    },
+    "digest": {
+      "title": "Something to revisit",
+      "body": "Open ReMind to review"
     }
   },
   "today": {
@@ -316,5 +320,43 @@
     "stage_departure-day": "Departure morning",
     "stage_return-eve": "The evening before you return",
     "past": "Finished"
+  },
+  "review": {
+    "heading": "Revisit",
+    "empty": "Nothing to revisit today",
+    "prompt": "Still worth keeping?",
+    "forgot": "Had forgotten",
+    "recalled": "Still relevant",
+    "easy": "Obviously",
+    "dismiss": "Stop asking",
+    "enrol": "Keep fresh",
+    "enrolled": "In rotation",
+    "waiting": "waiting",
+    "inRotation": "In rotation",
+    "digest": "Daily digest",
+    "digestOn": "One notification a day, when something is due",
+    "digestHour": "At",
+    "digestNeedsNotes": "Nothing is in rotation yet. Add a note from Search to start."
+  },
+  "audit": {
+    "heading": "Insights",
+    "noData": "Not enough history yet. This fills in as reminders are delivered.",
+    "responses": "How you respond",
+    "delivered": "Delivered",
+    "acted": "Acted on",
+    "dismissed": "Dismissed",
+    "snoozed": "Snoozed",
+    "ignored": "Ignored",
+    "byKind": "By reminder type",
+    "actedShare": "acted on",
+    "kind_time": "At a set time",
+    "kind_event-adjacent": "Before an event",
+    "kind_cadence": "Keeping in touch",
+    "kind_spaced": "Revisiting notes",
+    "scheduled": "Scheduled time",
+    "avgBusyDay": "Average on a day with something on",
+    "hoursUnit": "{{hours}} h",
+    "whenBusy": "When your days fill up",
+    "note": "Nothing here changes what the app does on its own. If a type of reminder is not working for you, the settings above are how to change it."
   }
 }

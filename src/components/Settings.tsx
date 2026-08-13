@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGES, db, type Lang, type Settings as SettingsRow } from '../db/schema';
 import { loadSettings } from '../db/settings';
@@ -17,18 +18,31 @@ import { forgetPushRegistration } from '../engine/index';
 import { changeLanguage } from '../i18n/index';
 import { pushAvailability, readPlatform } from '../install/platform';
 import { registerForPush } from '../install/push';
+import { parseHHmm } from '../engine/time';
+import { enrolledCount, ensureDigestArmed } from '../spaced/review';
+import { Insights } from './Insights';
 
 export interface SettingsProps {
   locale: Lang;
+  timezone: string;
   onLocaleChange: (locale: Lang) => void;
 }
 
-export function Settings({ locale, onLocaleChange }: SettingsProps) {
+/** The inverse of `parseHHmm`, for an `<input type="time">` bound to a minute count. */
+function minutesToHHmm(minutes: number): string {
+  const clamped = Math.max(0, Math.min(24 * 60 - 1, Math.round(minutes)));
+  const hh = String(Math.floor(clamped / 60)).padStart(2, '0');
+  const mm = String(clamped % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<SettingsRow | null>(null);
   const [availability, setAvailability] = useState(() => pushAvailability(readPlatform()));
   const [message, setMessage] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const rotation = useLiveQuery(() => enrolledCount(), [], 0);
 
   useEffect(() => {
     void loadSettings().then(setSettings);
@@ -197,6 +211,40 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
       </div>
 
       <div className="card">
+        <span className="card__label">{t('review.digest')}</span>
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={settings.digest.enabled}
+            onChange={(event) =>
+              // `ensureDigestArmed` both arms and clears, so one call covers either direction — and
+              // it is the only thing that decides whether there is anything worth arming.
+              void patch({ digest: { ...settings.digest, enabled: event.target.checked } }).then(() =>
+                ensureDigestArmed(),
+              )
+            }
+          />
+          <span>{t('review.digestOn')}</span>
+        </label>
+        <label className="field">
+          <span className="field__label">{t('review.digestHour')}</span>
+          <input
+            className="field__input"
+            type="time"
+            value={minutesToHHmm(settings.digest.atMinuteOfDay)}
+            onChange={(event) => {
+              const minutes = parseHHmm(event.target.value);
+              if (minutes === null) return;
+              void patch({ digest: { ...settings.digest, atMinuteOfDay: minutes } }).then(() =>
+                ensureDigestArmed(),
+              );
+            }}
+          />
+        </label>
+        {rotation === 0 && <p className="field__help">{t('review.digestNeedsNotes')}</p>}
+      </div>
+
+      <div className="card">
         <span className="card__label">{t('settings.interpretation')}</span>
       <label className="field">
         <span className="field__label">
@@ -249,6 +297,7 @@ export function Settings({ locale, onLocaleChange }: SettingsProps) {
           {message}
         </p>
       )}
+      <Insights locale={locale} timezone={timezone} />
     </section>
   );
 }

@@ -623,3 +623,104 @@ its state". It looked like a bug in the toggle, and was not: the input is contro
 round trip, and `.check()` asserts the state flipped synchronously. A direct probe confirmed the write
 (0 → 1 in the store, the DOM following). `.click()` plus an assertion on the rendered state is the
 correct harness for an async-controlled input.
+
+---
+
+# Phase 4 — Spaced repetition, digest, audits
+
+## The digest is the delivery; spaced triggers are only a schedule
+
+`isPushWorthy` now returns false for every `spaced` trigger. This is the load-bearing decision of the
+whole feature.
+
+Dozens of notes can come due on one day. Pushing each would spend the entire daily cap on review
+prompts and starve the reminders the user actually set — and the cap, doing its job, would then refuse
+most of them, so the review schedule would be silently incoherent. Instead one digest trigger carries
+the lot, and the spaced triggers stay purely local: they drive the in-app queue and never reach the
+backend at all.
+
+That also means the review schedule is invisible to the server, which was not the goal but is a
+welcome consequence.
+
+## The digest re-arms itself from the push handler
+
+A `time` trigger fires once. With no background execution, the only two moments anything can arm
+tomorrow's digest are an app launch and the service worker's own `push` handler.
+
+Relying on app launches alone would stop the digest for precisely the user who needs it most: the one
+who has stopped opening the app. So `handlePush` calls `ensureDigestArmed` after delivering a digest.
+This is the single place in the codebase where the one scrap of background execution the platform
+offers earns its keep.
+
+`ensureDigestArmed` is idempotent and also *disarms*: it clears the digest when the setting is off or
+when nothing is enrolled. An empty digest is the purest form of a notification that teaches people to
+ignore notifications.
+
+## A fourth answer beyond SM-2's three
+
+SM-2 has "forgot / recalled / easy". The UI adds **"stop asking"**, which removes the note from
+rotation outright.
+
+Without it the only exit is an interval that grows until the note effectively vanishes — deletion by
+attrition — and in the meantime the queue stays full of questions the user has already settled. A
+review queue you cannot say "no, permanently" to is one you stop opening.
+
+Two departures from textbook SM-2, both bounded:
+
+- **Interval capped at a year.** SM-2 has no ceiling. An eleven-year interval is indistinguishable
+  from deletion while still occupying a schedule, and the user never gets the chance to decide the
+  note is finished. A year means anything genuinely permanent comes round once more and can then be
+  dismissed on purpose.
+- **A lapse nudges easiness down by 0.2 rather than resetting it.** A note forgotten once is not a
+  note never seen; discarding the accumulated estimate makes the schedule oscillate.
+
+## `SchedulableCondition` and `isSchedulable` are gone
+
+Phase 1 narrowed `TriggerCondition` to the arms that had evaluators, so that adding one later would be
+a compile error at every call site rather than a surprise in production. That worked — it caught every
+site when `cadence` landed, and again for `spaced`.
+
+With all four arms implemented the type was a tautology and the guard always returned true. A type
+guard that cannot fail is worse than no guard, because it reads as though it were checking something.
+Both are deleted, and the reason is recorded at the top of `evaluate.ts` so nobody re-adds them.
+
+## Settings merges defaults on read
+
+`loadSettings` used to return the stored row untouched. That is fine until a field is added — and this
+app is already installed on a device holding a row written by an earlier version, where
+`settings.digest.enabled` would be a crash rather than a wrong default.
+
+`withDefaults` fills in anything missing, one level deep into the three nested objects, named
+explicitly rather than by a generic deep merge. It also repairs a partially-imported backup, which is
+the other way a short row appears.
+
+## Audits are shown, never acted on
+
+This is the first consumer of `TriggerFire`, which Phase 1 wrote with a comment saying nothing read it
+and the data was only collectable as it happened.
+
+The brief says Phase 4 "tunes on" the response log. It deliberately does not tune automatically. An
+app that quietly stops reminding you about a category because you dismissed it a few times has
+silently broken a promise you made to yourself — and the failure is invisible, because the evidence
+for it is the absence of a notification. So the numbers sit next to the controls that change them, and
+the card says in as many words that nothing here changes behaviour on its own.
+
+Three specific choices in the aggregation:
+
+- **Silence is counted separately from dismissal.** A dismissal is engagement: the user saw it and
+  decided. Being ignored is the number that should worry you.
+- **All-day events contribute no hours.** Counting a birthday as 24 hours would swamp every real
+  figure, and inventing a smaller number would be making data up.
+- **Reminder kinds are ordered worst-performing first**, because the point of the screen is to find
+  the reminders that are not working.
+
+## The bug the review card exposed in Today
+
+With a note in rotation, the Today screen listed its `spaced` trigger under "Scheduled Reminders" and
+marked it **missed** — because it was due, and had never "fired". The review queue working exactly as
+designed was being reported as a notification failure.
+
+`todayItems` now excludes `spaced` triggers and the digest. Both have their own card, and the digest in
+particular is the notification *about* the queue it would have been listed beside.
+
+Found by looking at a screenshot. Three tests pin it.

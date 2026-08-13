@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Event, TriggerCondition } from '../db/schema';
-import { desiredFireAt, isSchedulable, type SchedulableCondition } from './evaluate';
+import { desiredFireAt } from './evaluate';
 import { HOUR_MS, MINUTE_MS } from './time';
 
 const START = Date.UTC(2026, 5, 10, 17, 0); // 20:00 local in Jerusalem
@@ -22,45 +22,6 @@ function makeEvent(overrides: Partial<Event> = {}): Event {
     ...overrides,
   };
 }
-
-describe('isSchedulable', () => {
-  it('accepts the kinds that have evaluators', () => {
-    expect(isSchedulable({ kind: 'time', at: START, timezone: 'UTC' })).toBe(true);
-    expect(
-      isSchedulable({
-        kind: 'event-adjacent',
-        eventId: 'e1',
-        offsetMinutes: -30,
-        includeTravelBuffer: false,
-      }),
-    ).toBe(true);
-  });
-
-  it('accepts cadence', () => {
-    const cadence: TriggerCondition = {
-      kind: 'cadence',
-      personId: 'p1',
-      days: 30,
-      atMinuteOfDay: 540,
-      timezone: 'UTC',
-    };
-    expect(isSchedulable(cadence)).toBe(true);
-  });
-
-  it('rejects the kinds that do not', () => {
-    const spaced: TriggerCondition = {
-      kind: 'spaced',
-      entryId: 'x1',
-      ease: 2.5,
-      intervalDays: 1,
-      reps: 0,
-      lastReviewedAt: START,
-      atMinuteOfDay: 540,
-      timezone: 'UTC',
-    };
-    expect(isSchedulable(spaced)).toBe(false);
-  });
-});
 
 describe('desiredFireAt — cadence', () => {
   it('delegates to the cadence rule, which needs the person and the clock', () => {
@@ -103,7 +64,7 @@ describe('desiredFireAt — event-adjacent', () => {
   const adjacent = (
     offsetMinutes: number,
     includeTravelBuffer = false,
-  ): SchedulableCondition => ({
+  ): TriggerCondition => ({
     kind: 'event-adjacent',
     eventId: 'e1',
     offsetMinutes,
@@ -142,5 +103,37 @@ describe('desiredFireAt — event-adjacent', () => {
     // Deleted, or lost to a partial import. The caller deactivates the trigger.
     expect(desiredFireAt(adjacent(-30), { event: undefined })).toBeNull();
     expect(desiredFireAt(adjacent(-30, true), { event: undefined })).toBeNull();
+  });
+});
+
+describe('desiredFireAt — spaced', () => {
+  const spaced = (intervalDays: number, lastReviewedAt = START): TriggerCondition => ({
+    kind: 'spaced',
+    entryId: 'x1',
+    ease: 2.5,
+    intervalDays,
+    reps: 1,
+    lastReviewedAt,
+    atMinuteOfDay: 8 * 60,
+    timezone: 'UTC',
+  });
+
+  it('derives the due date from the last review plus the interval', () => {
+    // 10 June + 6 days = 16 June, snapped to the digest hour.
+    expect(desiredFireAt(spaced(6), {}, START)).toBe(Date.UTC(2026, 5, 16, 8, 0));
+  });
+
+  it('is due on the review day itself for a zero interval', () => {
+    expect(desiredFireAt(spaced(0), {}, START)).toBe(Date.UTC(2026, 5, 10, 8, 0));
+  });
+
+  it('snaps to the digest hour rather than the minute the review was answered', () => {
+    // A note due "in six days" should arrive with that morning's digest.
+    const odd = Date.UTC(2026, 5, 10, 23, 47);
+    expect(desiredFireAt(spaced(1, odd), {}, odd)).toBe(Date.UTC(2026, 5, 11, 8, 0));
+  });
+
+  it('needs no fetched target at all', () => {
+    expect(desiredFireAt(spaced(3), {}, START)).not.toBeNull();
   });
 });

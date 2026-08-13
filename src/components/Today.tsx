@@ -24,6 +24,7 @@ import { hasAnyPin, nearbyPins } from '../location/nearby';
 import { geolocationAlreadyGranted, readPosition } from '../location/position';
 import { startOfNextLocalDay } from '../engine/time';
 import { briefingsBetween } from '../people/briefing';
+import { Review } from './Review';
 
 export interface TodayProps {
   locale: Lang;
@@ -45,6 +46,8 @@ function label(
       return personLabel(target.person.name);
     case 'trip':
       return target.trip.destination;
+    case 'digest':
+      return target.first?.body ?? fallback;
     case 'unknown':
       return fallback;
   }
@@ -206,6 +209,8 @@ export function Today({ locale, timezone }: TodayProps) {
           )}
         </div>
       </div>
+
+      <Review locale={locale} />
 
       {/* There is no geofencing on the web, so this card *is* the feature: pinned notes surface
           when the app is opened somewhere near them, and never otherwise. */}

@@ -43,6 +43,11 @@ export function isPushWorthy(
 ): boolean {
   if (!trigger.active) return false;
   if (trigger.nextFireAt === null) return false;
+  // Spaced-repetition triggers are a *schedule*, not a delivery. Dozens of notes can come due on one
+  // day, and pushing each would spend the entire daily cap on review prompts and starve the reminders
+  // the user actually set. One digest trigger carries them instead, so these stay local: they drive
+  // the in-app review queue and never reach the backend.
+  if (trigger.kind === 'spaced') return false;
   if (trigger.nextFireAt <= now) return false;
   if (trigger.nextFireAt > now + horizonMs) return false;
   if (trigger.snoozedUntil !== null && trigger.snoozedUntil > trigger.nextFireAt) return false;

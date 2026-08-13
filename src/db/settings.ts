@@ -6,7 +6,14 @@
  * caller has to care whether onboarding has run yet.
  */
 
-import { db, type IanaTz, type Lang, type QuietHours, type Settings } from './schema';
+import {
+  db,
+  type DigestSettings,
+  type IanaTz,
+  type Lang,
+  type QuietHours,
+  type Settings,
+} from './schema';
 
 /**
  * Silent by default, and enabled by default. An app that resurfaces at 03:00 gets its
@@ -26,6 +33,19 @@ export const DEFAULT_CONFIDENCE_THRESHOLD = 0.8;
 
 /** iOS can evict IndexedDB without warning, so a backup nag is not optional. */
 export const DEFAULT_BACKUP_REMINDER_DAYS = 14;
+
+/**
+ * The digest is **off** by default.
+ *
+ * Same reasoning as quiet hours defaulting on: a daily notification nobody asked for is the fastest
+ * way to have notifications switched off entirely, and an app whose notifications are off is worth
+ * nothing. Review is opt-in, and enrolling a first note is what makes the setting worth finding.
+ */
+export const DEFAULT_DIGEST: DigestSettings = {
+  enabled: false,
+  atMinuteOfDay: 8 * 60,
+  maxItems: 5,
+};
 
 const SINGLETON = 'singleton' as const;
 
@@ -55,6 +75,7 @@ export function defaultSettings(): Settings {
     allowNetworkInterpretation: false,
     lastExportAt: null,
     backupReminderDays: DEFAULT_BACKUP_REMINDER_DAYS,
+    digest: { ...DEFAULT_DIGEST },
     onboarding: {
       dismissedInstallSheet: false,
       completedPushPrompt: false,
@@ -72,10 +93,36 @@ export function defaultSettings(): Settings {
  */
 export async function loadSettings(): Promise<Settings> {
   const existing = await db.settings.get(SINGLETON);
-  if (existing) return existing;
+  if (existing) return withDefaults(existing);
 
   const created = defaultSettings();
   // `put`, not `add`: two callers racing on a cold start must not throw.
   await db.settings.put(created);
   return created;
+}
+
+/**
+ * Fills in anything a stored row is missing.
+ *
+ * Necessary because this app is already installed on devices holding rows written by an earlier
+ * version. Returning the stored row untouched means every field added later arrives as `undefined`
+ * at a call site that has no reason to expect it — and for a nested field like `digest.enabled` that
+ * is a crash rather than a wrong default.
+ *
+ * Nested objects are merged one level deep and explicitly rather than by a generic deep merge: there
+ * are three of them, they are named here, and a generic merge would silently do the wrong thing to a
+ * field that is meant to be replaced wholesale rather than filled in.
+ *
+ * This also repairs a hand-edited or partially-imported backup, which is the other way a row ends up
+ * short of a field.
+ */
+function withDefaults(stored: Settings): Settings {
+  const defaults = defaultSettings();
+  return {
+    ...defaults,
+    ...stored,
+    quietHours: { ...defaults.quietHours, ...stored.quietHours },
+    digest: { ...defaults.digest, ...stored.digest },
+    onboarding: { ...defaults.onboarding, ...stored.onboarding },
+  };
 }

@@ -7,9 +7,11 @@
  */
 
 import { useEffect, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
-import type { Lang } from '../db/schema';
+import { db, type ID, type Lang } from '../db/schema';
 import { searchEntries, type SearchHit } from '../search/search';
+import { enrol, unenrol } from '../spaced/review';
 
 export interface SearchProps {
   locale: Lang;
@@ -43,6 +45,23 @@ export function Search({ locale, timezone }: SearchProps) {
     };
   }, [query]);
 
+  /**
+   * Which entries are already in the review rotation.
+   *
+   * One query over active triggers rather than one per result: the set is small, and a per-row query
+   * would fire on every keystroke's worth of results.
+   */
+  const enrolled = useLiveQuery(
+    async () => {
+      const active = await db.triggers.where('active').equals(1).toArray();
+      return new Set(
+        active.filter((trigger) => trigger.condition.kind === 'spaced').map((t) => t.targetId),
+      );
+    },
+    [],
+    new Set<ID>(),
+  );
+
   const formatDate = (at: number) =>
     new Intl.DateTimeFormat(locale, {
       day: 'numeric',
@@ -75,11 +94,31 @@ export function Search({ locale, timezone }: SearchProps) {
                 <div className="item__time">{formatDate(hit.entry.capturedAt)}</div>
                 {/* The body as captured, not the parsed title. */}
                 <div className="item__title">{hit.entry.body}</div>
+                {/* Search is where enrolment belongs: you have just gone looking for something, which
+                    is the moment you know whether it is worth keeping in front of you. */}
+                <RotationToggle entryId={hit.entry.id} enrolled={enrolled.has(hit.entry.id)} />
               </li>
             ))}
           </ul>
         </>
       )}
     </section>
+  );
+}
+
+/** Puts an entry into the spaced-repetition rotation, or takes it out. */
+function RotationToggle({ entryId, enrolled }: { entryId: ID; enrolled: boolean }) {
+  const { t } = useTranslation();
+  return (
+    <div className="capture__actions">
+      <button
+        type="button"
+        className="button button--quiet button--small"
+        data-active={enrolled}
+        onClick={() => void (enrolled ? unenrol(entryId) : enrol(entryId))}
+      >
+        {enrolled ? t('review.enrolled') : t('review.enrol')}
+      </button>
+    </div>
   );
 }

@@ -33,6 +33,22 @@ export interface TodayItem {
  * screen exists to catch. Hiding it because its moment passed would make the failure
  * invisible.
  */
+/**
+ * Whether a trigger belongs in the scheduled-reminders list.
+ *
+ * Two kinds are deliberately excluded because they have their own surface, and showing them here is
+ * actively misleading rather than merely redundant:
+ *
+ * - **`spaced`** triggers are a review schedule, not a delivery. One due today has never "fired", so
+ *   it would render as an *overdue reminder that was missed* — describing the review queue working
+ *   exactly as designed as a failure of the notification system.
+ * - **The digest** is the notification *about* that queue. Listing it next to the queue's own card is
+ *   telling the user the same thing twice, once as a piece of plumbing.
+ */
+function isSurfacedHere(trigger: Trigger): boolean {
+  return trigger.kind !== 'spaced' && trigger.targetType !== 'digest';
+}
+
 export async function todayItems(timezone: IanaTz, now: EpochMs = Date.now()): Promise<TodayItem[]> {
   const dayEnd = startOfNextLocalDay(now, timezone);
   const today = localDayKey(now, timezone);
@@ -46,6 +62,7 @@ export async function todayItems(timezone: IanaTz, now: EpochMs = Date.now()): P
     due
       // The index range starts at 0, so filter to the local day rather than all of history.
       .filter((trigger) => localDayKey(trigger.nextFireAt as EpochMs, timezone) === today)
+      .filter(isSurfacedHere)
       .map(async (trigger): Promise<TodayItem> => ({
         trigger,
         target: await resolveTriggerTarget(trigger),

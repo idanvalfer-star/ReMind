@@ -176,3 +176,49 @@ describe('unscheduledEntries', () => {
     expect(await unscheduledEntries()).toEqual([]);
   });
 });
+
+describe('todayItems — surfaces with their own card', () => {
+  it('excludes a spaced trigger due today', async () => {
+    // It has never "fired", so it would otherwise render as an overdue reminder that was missed —
+    // describing the review queue working as designed as a notification failure.
+    await addTrigger({
+      kind: 'spaced',
+      targetType: 'entry',
+      targetId: 'entry-1',
+      condition: {
+        kind: 'spaced',
+        entryId: 'entry-1',
+        ease: 2.5,
+        intervalDays: 1,
+        reps: 1,
+        lastReviewedAt: local(10, 8),
+        atMinuteOfDay: 8 * 60,
+        timezone: JLM,
+      },
+      nextFireAt: local(10, 8),
+    });
+    expect(await todayItems(JLM, local(10, 12))).toEqual([]);
+  });
+
+  it('excludes the daily digest, which is the notification about that queue', async () => {
+    await addTrigger({
+      kind: 'time',
+      targetType: 'digest',
+      targetId: 'singleton',
+      condition: { kind: 'time', at: local(10, 8), timezone: JLM },
+      nextFireAt: local(10, 8),
+    });
+    expect(await todayItems(JLM, local(10, 12))).toEqual([]);
+  });
+
+  it('still includes an ordinary reminder due today', async () => {
+    await addTrigger({
+      kind: 'time',
+      targetType: 'entry',
+      targetId: 'entry-1',
+      condition: { kind: 'time', at: local(10, 8), timezone: JLM },
+      nextFireAt: local(10, 8),
+    });
+    expect(await todayItems(JLM, local(10, 12))).toHaveLength(1);
+  });
+});

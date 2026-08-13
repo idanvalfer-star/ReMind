@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { db, type Lang } from './db/schema';
 import { detectLocale, detectTimezone, loadSettings } from './db/settings';
 import { reconcile } from './engine/index';
+import { ensureDigestArmed } from './spaced/review';
 import { DAY_MS } from './engine/time';
 import { applyDocumentLanguage, changeLanguage } from './i18n/index';
 import { pushAvailability, readPlatform, shouldShowInstallSheet } from './install/platform';
@@ -84,6 +85,10 @@ export function App() {
       // push sent while offline — so every launch brings it back into line. Not awaited: nothing
       // on screen depends on it.
       void reconcile();
+      // The digest is a one-shot `time` trigger. The service worker re-arms it after each firing;
+      // this is the other half, covering the case where it never fired at all — permission
+      // declined, device offline, or the setting only just switched on.
+      void ensureDigestArmed();
     })();
     return () => {
       cancelled = true;
@@ -136,7 +141,7 @@ export function App() {
         {view === 'trips' && ready && <Trips locale={locale} timezone={timezone} />}
         {view === 'search' && ready && <Search locale={locale} timezone={timezone} />}
         {view === 'settings' && ready && (
-          <Settings locale={locale} onLocaleChange={handleLocaleChange} />
+          <Settings locale={locale} timezone={timezone} onLocaleChange={handleLocaleChange} />
         )}
       </main>
 

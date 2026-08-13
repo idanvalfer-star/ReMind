@@ -32,8 +32,23 @@ export type HHmm = string;
 export type Lang = 'en' | 'he';
 export const LANGUAGES: readonly Lang[] = ['en', 'he'] as const;
 
-/** Every addressable node in the graph. Widens as later phases land. */
-export type EntityType = 'entry' | 'event' | 'person' | 'fact' | 'trip' | 'packItem' | 'trigger';
+/**
+ * Every addressable node in the graph.
+ *
+ * `digest` is the odd one: there is no `Digest` table, because there is only ever one and it has no
+ * state beyond the settings that describe it. It exists as a target type so the daily
+ * spaced-repetition digest can be an ordinary trigger — subject to the same quiet hours and cap as
+ * everything else — rather than a special case bolted onto the scheduler.
+ */
+export type EntityType =
+  | 'entry'
+  | 'event'
+  | 'person'
+  | 'fact'
+  | 'trip'
+  | 'packItem'
+  | 'trigger'
+  | 'digest';
 
 export interface GeoPoint {
   lat: number;
@@ -334,6 +349,20 @@ export interface QuietHours {
   end: HHmm;
 }
 
+/**
+ * The daily spaced-repetition digest.
+ *
+ * One notification a day carrying a count, rather than one per note. Per-note pushes would spend the
+ * entire daily cap on review prompts and starve the reminders the user actually set.
+ */
+export interface DigestSettings {
+  enabled: boolean;
+  /** Minutes past local midnight. */
+  atMinuteOfDay: number;
+  /** Beyond this many due notes, the digest says "lots" rather than a number nobody will act on. */
+  maxItems: number;
+}
+
 export interface Settings {
   id: 'singleton';
   locale: Lang;
@@ -354,6 +383,7 @@ export interface Settings {
   lastExportAt: EpochMs | null;
   /** Nag for a JSON backup after this many days. iOS can evict IndexedDB. */
   backupReminderDays: number;
+  digest: DigestSettings;
   onboarding: {
     dismissedInstallSheet: boolean;
     /** True once the user has been asked for notification permission in standalone. */

@@ -39,6 +39,10 @@
         "title": "{{destination}}",
         "body": "פתח את ReMind לרשימת האריזה."
       }
+    },
+    "digest": {
+      "title": "משהו לרענן",
+      "body": "פתח את ReMind כדי לעבור על זה"
     }
   },
   "today": {
@@ -316,5 +320,43 @@
     "stage_departure-day": "בבוקר היציאה",
     "stage_return-eve": "בערב שלפני החזרה",
     "past": "הסתיימה"
+  },
+  "review": {
+    "heading": "לרענן",
+    "empty": "אין מה לרענן היום",
+    "prompt": "עוד שווה לשמור?",
+    "forgot": "שכחתי",
+    "recalled": "עוד רלוונטי",
+    "easy": "ברור",
+    "dismiss": "להפסיק לשאול",
+    "enrol": "לשמור טרי",
+    "enrolled": "בסבב",
+    "waiting": "ממתין",
+    "inRotation": "בסבב",
+    "digest": "סיכום יומי",
+    "digestOn": "התראה אחת ביום, כשיש משהו",
+    "digestHour": "בשעה",
+    "digestNeedsNotes": "עוד אין כלום בסבב. הוסף פתק מהחיפוש כדי להתחיל."
+  },
+  "audit": {
+    "heading": "תמונת מצב",
+    "noData": "עוד אין מספיק היסטוריה. זה יתמלא כשיגיעו תזכורות.",
+    "responses": "איך אתה מגיב",
+    "delivered": "נשלחו",
+    "acted": "טופלו",
+    "dismissed": "נדחו",
+    "snoozed": "נדחו לזמן אחר",
+    "ignored": "לא נענו",
+    "byKind": "לפי סוג תזכורת",
+    "actedShare": "טופלו",
+    "kind_time": "בשעה מסוימת",
+    "kind_event-adjacent": "לפני אירוע",
+    "kind_cadence": "שמירה על קשר",
+    "kind_spaced": "רענון פתקים",
+    "scheduled": "זמן מתוכנן",
+    "avgBusyDay": "ממוצע ביום עם משהו",
+    "hoursUnit": "{{hours}} שע׳",
+    "whenBusy": "מתי הימים מתמלאים",
+    "note": "שום דבר כאן לא משנה את התנהגות האפליקציה מעצמו. אם סוג תזכורת לא עובד בשבילך, ההגדרות שלמעלה הן הדרך לשנות."
   }
 }

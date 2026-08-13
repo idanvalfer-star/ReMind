@@ -706,3 +706,29 @@ input[type='range']:focus-visible {
 .card .section-label {
   margin-block: 0.7rem 0.3rem;
 }
+
+/* ---------------------------------------------------------------- insights */
+
+/*
+ * 24 bars, one per hour of the day. A histogram rather than a summary number because the *shape* is
+ * the finding — "my evenings are gone" is not something a mean conveys.
+ */
+.hour-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  block-size: 56px;
+  margin-block: 0.4rem 0.8rem;
+}
+
+.hour-histogram__bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: 2px;
+  /* A zero-count hour still needs a visible baseline, or the axis disappears. */
+  min-block-size: 2px;
+}
+
+.hour-histogram__bar[data-empty='true'] {
+  background: var(--border-strong);
+}

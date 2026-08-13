@@ -48,6 +48,18 @@ export type NotificationTarget =
        */
       stage: StageId | null;
     }
+  | {
+      type: 'digest';
+      /** How many notes are due. Shown in the app, deliberately not in the notification. */
+      dueCount: number;
+      /**
+       * The most overdue note. The digest's body is this note's own words rather than a count,
+       * because "3 notes to review" is an errand and the note itself is the thing worth seeing —
+       * and because a count in a sentence needs plural rules that Hebrew does not share with
+       * English.
+       */
+      first: Entry | null;
+    }
   | { type: 'unknown' };
 
 export interface NotificationContent {
@@ -193,6 +205,13 @@ export function composeNotification({
       };
     }
 
+    case 'digest':
+      return {
+        title: t('notify.digest.title'),
+        body: target.first ? truncate(target.first.body) : t('notify.digest.body'),
+        tag,
+      };
+
     case 'unknown':
       // Data cleared, or a push for a trigger this device no longer knows about.
       return {
@@ -226,6 +245,8 @@ export const NOTIFICATION_KEYS = [
   'notify.trip.return-eve.body',
   'notify.trip.generic.title',
   'notify.trip.generic.body',
+  'notify.digest.title',
+  'notify.digest.body',
   'notify.fallback.title',
   'notify.fallback.body',
 ] as const;

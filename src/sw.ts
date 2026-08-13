@@ -22,6 +22,7 @@ import { composeNotification } from './engine/notify';
 import { resolveTriggerTarget } from './engine/target';
 import { recordFire, recordResponse } from './engine/log';
 import { pendingPushes, reconcilePushes, subscribe } from './engine/sync';
+import { ensureDigestArmed } from './spaced/review';
 import { createTranslator } from './i18n/resources';
 import type { PushPayload } from './shared/pushProtocol';
 
@@ -127,6 +128,16 @@ async function handlePush(event: PushEvent): Promise<void> {
         updatedAt: now,
       }),
     ]);
+
+    // The daily digest is a one-shot `time` trigger, so something has to arm tomorrow's. Doing it
+    // here rather than only on app open is what keeps it recurring for the user who most needs it:
+    // the one who has stopped opening the app. A push handler is the only background execution this
+    // platform offers, and this is the one place it earns its keep.
+    if (trigger.targetType === 'digest') {
+      await ensureDigestArmed(now).catch((cause) =>
+        console.warn('could not arm the next digest', cause),
+      );
+    }
   } catch (cause) {
     console.error('push handling failed; showing the generic notification', cause);
     await showFallback(triggerId);

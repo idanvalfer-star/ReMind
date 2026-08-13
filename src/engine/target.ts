@@ -10,6 +10,7 @@
 
 import { db, type Event, type Trigger } from '../db/schema';
 import { buildBriefing, groupFactsByPerson, type PersonFacts } from '../people/briefing';
+import { dueCount, reviewQueue } from '../spaced/review';
 import { stageIdAt } from '../trips/stages';
 import type { NotificationTarget } from './notify';
 
@@ -50,6 +51,13 @@ export async function resolveTriggerTarget(trigger: Trigger): Promise<Notificati
       // moving a trip re-labels its pending reminders instead of leaving them lying about the day.
       const at = trigger.nextFireAt ?? trigger.lastFiredAt ?? Date.now();
       return { type: 'trip', trip, stage: stageIdAt(trip, at) };
+    }
+
+    case 'digest': {
+      // Read through the same queue the review screen uses, so the notification and the screen
+      // cannot disagree about what is due.
+      const queue = await reviewQueue(1);
+      return { type: 'digest', dueCount: await dueCount(), first: queue[0]?.entry ?? null };
     }
 
     default:

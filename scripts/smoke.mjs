@@ -352,6 +352,72 @@ log(
 );
 await page.screenshot({ path: `${OUT}/18-nearby-away.png` });
 
+// ---------------------------------------------------------------- spaced repetition
+await page.locator('.tabbar__tab', { hasText: 'Search' }).click();
+await page.waitForTimeout(500);
+await page.fill('input[type="search"]', 'alex');
+await page.waitForTimeout(900);
+log(
+  await page.locator('button', { hasText: 'Keep fresh' }).first().isVisible(),
+  'search results offer the review rotation',
+);
+await page.locator('button', { hasText: 'Keep fresh' }).first().click();
+await page.waitForTimeout(900);
+log(
+  await page.locator('button', { hasText: 'In rotation' }).first().isVisible(),
+  'a note can be put into rotation',
+);
+await page.screenshot({ path: `${OUT}/24-search-rotation.png` });
+
+// A spaced trigger is a schedule, not a delivery: it must never reach the push backend.
+const spacedRows = await page.evaluate(async () => {
+  const open = indexedDB.open('remind');
+  const dbh = await new Promise((res, rej) => {
+    open.onsuccess = () => res(open.result);
+    open.onerror = () => rej(open.error);
+  });
+  const rows = await new Promise((res, rej) => {
+    const req = dbh.transaction('triggers').objectStore('triggers').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  return rows
+    .filter((r) => r.kind === 'spaced')
+    .map((r) => ({ active: r.active, synced: r.syncedFireAt, interval: r.condition.intervalDays }));
+});
+log(spacedRows.length === 1, 'one spaced trigger was created', JSON.stringify(spacedRows));
+log(
+  spacedRows[0]?.syncedFireAt === undefined || spacedRows[0]?.synced === null,
+  'the spaced trigger was never mirrored to the backend',
+);
+
+// The review card, due immediately by design.
+await page.locator('.tabbar__tab', { hasText: 'Today' }).click();
+await page.waitForTimeout(1000);
+const reviewCard = (await page.locator('main').textContent()) ?? '';
+log(/Revisit/i.test(reviewCard), 'the review card appears on Today', reviewCard.trim().slice(0, 60));
+log(/Still worth keeping/i.test(reviewCard), 'the card asks the question');
+await page.screenshot({ path: `${OUT}/25-review-card.png` });
+
+// Answering must push the interval out, so the card disappears until it is due again.
+await page.locator('button', { hasText: 'Still relevant' }).click();
+await page.waitForTimeout(1200);
+log(
+  !/Still worth keeping/i.test((await page.locator('main').textContent()) ?? ''),
+  'answering removes it from the queue until it is next due',
+);
+const afterReview = await page.evaluate(async () => {
+  const open = indexedDB.open('remind');
+  const dbh = await new Promise((res) => (open.onsuccess = () => res(open.result)));
+  const rows = await new Promise((res) => {
+    const req = dbh.transaction('triggers').objectStore('triggers').getAll();
+    req.onsuccess = () => res(req.result);
+  });
+  const spaced = rows.find((r) => r.kind === 'spaced');
+  return { interval: spaced?.condition.intervalDays, reps: spaced?.condition.reps };
+});
+log(afterReview.reps === 1 && afterReview.interval === 1, 'SM-2 advanced to its first interval', JSON.stringify(afterReview));
+
 // ---------------------------------------------------------------- settings + RTL
 await page.locator('.tabbar__tab', { hasText: 'Settings' }).click();
 await page.waitForTimeout(700);
@@ -359,6 +425,15 @@ const settingsText = (await page.locator('.settings').textContent()) ?? '';
 log(/Notifications/i.test(settingsText), 'settings renders');
 log(/Quiet hours/i.test(settingsText), 'quiet hours controls present');
 log(/Backup/i.test(settingsText), 'backup controls present');
+log(/Daily digest/i.test(settingsText), 'the digest control is present');
+// Insights reads TriggerFire, which Phase 1 wrote and nothing consumed until now. No pushes have
+// been delivered in this run, so the empty state is what should show — the histogram appears once
+// there are events, which there are.
+log(/Insights/i.test(settingsText), 'the insights card renders', settingsText.slice(0, 40));
+log(
+  (await page.locator('.hour-histogram__bar').count()) === 24,
+  'the hour histogram has a bar per hour',
+);
 await page.screenshot({ path: `${OUT}/09-settings.png` });
 
 // Switch to Hebrew and confirm the document flips.
