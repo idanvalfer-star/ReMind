@@ -180,5 +180,13 @@
     "denied": "Notifications are blocked. You can re-enable them in iOS Settings under ReMind.",
     "unsupported": "This browser cannot receive push notifications.",
     "captureOnly": "Without notifications ReMind still captures and shows your reminders in the app — it just cannot interrupt you."
+  },
+  "nearby": {
+    "heading": "Near you now",
+    "pin": "Pin here",
+    "away": "{{distance}} away",
+    "here": "right here",
+    "denied": "Location is off, so pinned notes cannot surface. You can turn it back on in your browser settings.",
+    "unavailable": "Could not get a location fix just now."
   }
 }

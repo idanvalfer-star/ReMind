@@ -205,6 +205,58 @@ log(
 );
 await page.screenshot({ path: `${OUT}/15-today-briefing.png` });
 
+// ---------------------------------------------------------------- location pins
+// Geolocation is granted and stubbed to a fixed point, because the whole feature is a comparison
+// between two coordinates and the interesting question is whether the round trip through IndexedDB
+// and back onto the screen works.
+await context.grantPermissions(['geolocation']);
+await context.setGeolocation({ latitude: 32.08, longitude: 34.78, accuracy: 20 });
+
+await page.locator('.tabbar__tab', { hasText: 'Today' }).click();
+await page.waitForTimeout(600);
+const pinnable = await page.locator('button', { hasText: 'Pin here' }).count();
+log(pinnable > 0, 'unscheduled notes offer a pin', `${pinnable} offered`);
+
+await page.locator('button', { hasText: 'Pin here' }).first().click();
+await page.waitForTimeout(1200);
+const pinnedText = (await page.locator('main').textContent()) ?? '';
+log(/Near you now/i.test(pinnedText), 'a pinned note surfaces while standing on it', pinnedText.trim().slice(0, 60));
+log(/right here/i.test(pinnedText), 'distance reads as "right here" on the spot');
+await page.screenshot({ path: `${OUT}/17-nearby.png` });
+
+// A pin must never reach the push backend: with no time attached it cannot fire, so it is not
+// scheduled, and an unscheduled trigger is never mirrored. This is the privacy claim for places.
+const pinRow = await page.evaluate(async () => {
+  const open = indexedDB.open('remind');
+  const dbh = await new Promise((res, rej) => {
+    open.onsuccess = () => res(open.result);
+    open.onerror = () => rej(open.error);
+  });
+  const rows = await new Promise((res, rej) => {
+    const req = dbh.transaction('triggers').objectStore('triggers').getAll();
+    req.onsuccess = () => res(req.result);
+    req.onerror = () => rej(req.error);
+  });
+  const pins = rows.filter((r) => r.location !== null);
+  return pins.map((p) => ({ nextFireAt: p.nextFireAt, syncedFireAt: p.syncedFireAt, active: p.active }));
+});
+log(pinRow.length === 1, 'exactly one pin was stored', JSON.stringify(pinRow));
+log(
+  pinRow[0]?.nextFireAt === null && pinRow[0]?.syncedFireAt === null && pinRow[0]?.active === 1,
+  'the pin is active but unscheduled, so it is never mirrored to the backend',
+  JSON.stringify(pinRow[0]),
+);
+
+// Walk far away: the card must disappear rather than persist from the earlier read.
+await context.setGeolocation({ latitude: 31.7683, longitude: 35.2137, accuracy: 20 });
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForTimeout(1500);
+log(
+  !/Near you now/i.test((await page.locator('main').textContent()) ?? ''),
+  'the pin does not surface from 50 km away',
+);
+await page.screenshot({ path: `${OUT}/18-nearby-away.png` });
+
 // ---------------------------------------------------------------- settings + RTL
 await page.locator('.tabbar__tab', { hasText: 'Settings' }).click();
 await page.waitForTimeout(700);

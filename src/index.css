@@ -436,8 +436,9 @@ input[type='range']:focus-visible {
   color: var(--overdue);
 }
 
-/* Three columns: kind pill, the fact itself, and the delete control. */
-.item--fact {
+/* Three columns: a leading marker, the text, and a trailing control. */
+.item--fact,
+.item--with-action {
   grid-template-columns: auto 1fr auto;
   align-items: center;
 }

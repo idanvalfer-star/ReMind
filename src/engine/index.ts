@@ -352,6 +352,65 @@ async function recomputeAll(
   }
 }
 
+/**
+ * Pins a note to a place, with no time attached.
+ *
+ * This is what location resurfacing has to look like on this platform. There is no Geofencing API
+ * and no background execution, so nothing can wake the device on arrival — which means a pinned
+ * reminder is not scheduled at all. It is stored with `nextFireAt: null` and surfaced when the app
+ * is next opened somewhere near it.
+ *
+ * That representation is exact rather than a workaround: `null` is not a valid IndexedDB key, so the
+ * row falls out of the `[active+nextFireAt]` index on its own. It is never selected as due, never
+ * mirrored to the backend, and therefore never appears in D1 — a pinned place stays on the device
+ * even by accident.
+ *
+ * Quiet hours and the cap are deliberately not consulted. Neither applies to something that cannot
+ * interrupt: the card is only ever seen by a user who has just opened the app themselves.
+ */
+export async function pinTriggerToPlace(input: {
+  targetType: EntityType;
+  targetId: ID;
+  location: NonNullable<Trigger['location']>;
+  link?: { fromType: EntityType; fromId: ID; relation: LinkRelation } | undefined;
+}): Promise<Trigger> {
+  const now = Date.now();
+  const trigger: Trigger = {
+    id: crypto.randomUUID(),
+    targetType: input.targetType,
+    targetId: input.targetId,
+    kind: 'time',
+    // A time condition at the epoch would be a lie about intent, so the condition names the instant
+    // the pin was made. Nothing evaluates it — `nextFireAt` stays null — but it records when.
+    condition: { kind: 'time', at: now, timezone: (await loadSettings()).timezone },
+    nextFireAt: null,
+    lastFiredAt: null,
+    active: 1,
+    snoozedUntil: null,
+    location: input.location,
+    syncedFireAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const writes: Promise<unknown>[] = [db.triggers.add(trigger)];
+  if (input.link) {
+    writes.push(
+      db.links.add({
+        id: crypto.randomUUID(),
+        fromType: input.link.fromType,
+        fromId: input.link.fromId,
+        toType: 'trigger',
+        toId: trigger.id,
+        relation: input.link.relation,
+        createdAt: now,
+      }),
+    );
+  }
+  await Promise.all(writes);
+  return trigger;
+}
+
 /** Records what the user did with a delivered reminder. */
 export async function recordTriggerResponse(
   triggerId: ID,

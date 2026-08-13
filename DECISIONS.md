@@ -454,3 +454,57 @@ score, so the fix belonged in the new caller rather than the shared query.
 **`.followup` is a wrapping row, not a column.** Reusing it for the fact form sized the text input to
 its content instead of stretching it. Found by looking at a screenshot, not by any assertion —
 `.followup--sheet` is the stretched variant.
+
+## A pinned place is a trigger with no fire time
+
+The brief resolves the missing Geofencing API into "on app open, check current position and surface
+anything pinned nearby", and keeps `location` on `Trigger` so it upgrades later. The representation
+that falls out of that is exact rather than a compromise:
+
+- `location` set, `nextFireAt: null`, `active: 1`.
+- `null` is not a valid IndexedDB key, so the row drops out of the `[active+nextFireAt]` index by
+  itself. It is never selected as due, never mirrored, never in D1.
+
+So "pinned places never leave the device" is a property of the schema, not a rule someone has to
+remember. That is worth more than a comment, and it is why `pinTriggerToPlace` is a separate entry
+point rather than a flag on `registerTrigger`: the scheduling path must not be able to reach a pin.
+
+Quiet hours and the cap are deliberately not consulted. Neither applies to something that cannot
+interrupt — the card is only ever seen by a user who has just opened the app themselves.
+
+`pinsNear` also excludes any pin that *is* scheduled. It will arrive as a push at its own time, and
+surfacing it early because you walked past somewhere would be a second, unasked-for delivery of one
+reminder.
+
+## Pinning is "here", not a place search
+
+Turning an address into coordinates needs a geocoder. Nominatim is free but is a network call on
+every pin, has a usage policy, and would put the name of the place you are pinning onto someone
+else's server — which is the one thing the rest of this document is about not doing.
+
+So the only pinning gesture is **"Pin here"**: it captures the position you are standing at. No API,
+no key, no network, works offline, and it matches how the feature actually gets used — you are in the
+shop when you remember to ask about the vase.
+
+## Device accuracy widens the catchment rather than being ignored
+
+`isNear` adds the fix's reported accuracy to the pin's radius. A 400 m fix from a coarse network
+lookup is not evidence you are anywhere precise, and the honest consequence is that it matches *more*
+pins, not fewer. Showing a card the user can ignore beats staying silent while they stand in the
+right place. The default radius is 200 m — about a city block, and above the 20-50 m error a phone
+routinely reports, worse indoors.
+
+## Location permission is gated the same way notification permission is
+
+The brief is emphatic about not burning the notification prompt in a browser tab. Geolocation has the
+same failure mode and less recourse — Safari offers no obvious second chance once a prompt is
+dismissed.
+
+Two rules, enforced by construction rather than by care:
+
+1. The only call that can *raise* a prompt is `pinHere`, which is an explicit tap.
+2. The on-open check runs only when `hasAnyPin()` **and** `geolocationAlreadyGranted()`. The latter
+   goes through the Permissions API and returns false when it is unavailable, so on an engine without
+   it the on-open half is simply skipped and pinning still works.
+
+For a user who never pins anything, the entire feature costs one indexed read at launch.

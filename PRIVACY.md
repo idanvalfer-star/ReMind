@@ -46,6 +46,20 @@ Quiet hours and the daily cap are applied **on your device, before** a reminder 
 the server never learns them — it only ever receives an absolute instant that already satisfies
 them.
 
+### Pinned places, specifically
+
+A note pinned to a place stores its coordinates in IndexedDB and **nothing is sent anywhere at all**
+— not the coordinates, not the fact that a pin exists.
+
+This is not a promise held in place by careful coding; it is a consequence of the platform. There is
+no Geofencing API on the web and no background execution, so arriving somewhere cannot wake your
+device. A pin therefore has no fire time, and a trigger with no fire time is never scheduled and
+never mirrored to the backend. It is checked only when you open the app yourself.
+
+The one control worth knowing about: reading your position happens **only** when you tap "Pin here",
+or when you open the app while something is already pinned *and* you have already granted location
+permission. The app never asks for that permission on its own.
+
 ---
 
 ## What this *does* reveal

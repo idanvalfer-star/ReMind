@@ -10,12 +10,18 @@
  * it. Those are the notes most likely to be genuinely forgotten, so they sit next to each other.
  */
 
+import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import type { Lang } from '../db/schema';
 import { groupByLocalDay, eventsBetween } from '../calendar/events';
 import { monthGrid, weekDays, weekdayLabels } from '../calendar/monthGrid';
-import { todayItems, unscheduledEntries, type TodayItem } from '../engine/today';
+import type { NotificationTarget } from '../engine/notify';
+import { pinTriggerToPlace } from '../engine/index';
+import { todayItems, unscheduledEntries } from '../engine/today';
+import { DEFAULT_PIN_RADIUS_M, type Fix } from '../location/geo';
+import { hasAnyPin, nearbyPins } from '../location/nearby';
+import { geolocationAlreadyGranted, readPosition } from '../location/position';
 import { startOfNextLocalDay } from '../engine/time';
 import { briefingsBetween } from '../people/briefing';
 
@@ -24,15 +30,19 @@ export interface TodayProps {
   timezone: string;
 }
 
-function label(item: TodayItem, fallback: string, personLabel: (name: string) => string): string {
-  switch (item.target.type) {
+function label(
+  target: NotificationTarget,
+  fallback: string,
+  personLabel: (name: string) => string,
+): string {
+  switch (target.type) {
     case 'event':
       // A private event keeps its title off any surface that might be glanced at.
-      return item.target.event.isPrivate ? fallback : item.target.event.title;
+      return target.event.isPrivate ? fallback : target.event.title;
     case 'entry':
-      return item.target.entry.body;
+      return target.entry.body;
     case 'person':
-      return personLabel(item.target.person.name);
+      return personLabel(target.person.name);
     case 'unknown':
       return fallback;
   }
@@ -41,6 +51,51 @@ function label(item: TodayItem, fallback: string, personLabel: (name: string) =>
 export function Today({ locale, timezone }: TodayProps) {
   const { t } = useTranslation();
   const now = Date.now();
+  const [fix, setFix] = useState<Fix | null>(null);
+  const [positionProblem, setPositionProblem] = useState<'denied' | 'unavailable' | null>(null);
+
+  /**
+   * The "check on open" half of location resurfacing.
+   *
+   * Runs only when something is actually pinned *and* permission is already granted, so it can
+   * never be the thing that raises a prompt. Both conditions failing is the ordinary case, and the
+   * cost of the feature for a user who never pins anything is one indexed read.
+   */
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      if (!(await hasAnyPin())) return;
+      if (!(await geolocationAlreadyGranted())) return;
+      const outcome = await readPosition();
+      if (cancelled) return;
+      if (outcome.kind === 'fix') setFix(outcome.fix);
+      else setPositionProblem(outcome.kind);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Pins an entry to wherever the device is standing. Prompts for permission if it must. */
+  async function pinHere(entryId: string) {
+    const outcome = await readPosition();
+    if (outcome.kind !== 'fix') {
+      setPositionProblem(outcome.kind);
+      return;
+    }
+    setPositionProblem(null);
+    setFix(outcome.fix);
+    await pinTriggerToPlace({
+      targetType: 'entry',
+      targetId: entryId,
+      location: {
+        lat: outcome.fix.lat,
+        lng: outcome.fix.lng,
+        radiusM: DEFAULT_PIN_RADIUS_M,
+      },
+      link: { fromType: 'entry', fromId: entryId, relation: 'reminds-of' },
+    });
+  }
 
   // Re-run whenever the tables change, so a reminder firing while the app is open appears without
   // a refresh.
@@ -65,6 +120,25 @@ export function Today({ locale, timezone }: TodayProps) {
   );
   const byDay = groupByLocalDay(monthEvents ?? [], timezone);
 
+  // Keyed on the fix so walking somewhere else re-evaluates, and on the trigger table so a pin made
+  // in this session appears without a reload.
+  const nearby = useLiveQuery(
+    () => (fix ? nearbyPins(fix) : Promise.resolve([])),
+    [fix?.lat, fix?.lng, fix?.accuracyM],
+    [],
+  );
+
+  const formatDistance = (meters: number) => {
+    if (meters < 30) return t('nearby.here');
+    return t('nearby.away', {
+      distance: new Intl.NumberFormat(locale, {
+        style: 'unit',
+        unit: meters >= 1000 ? 'kilometer' : 'meter',
+        maximumFractionDigits: meters >= 1000 ? 1 : 0,
+      }).format(meters >= 1000 ? meters / 1000 : meters),
+    });
+  };
+
   const formatTime = (at: number) =>
     new Intl.DateTimeFormat(locale, {
       hour: '2-digit',
@@ -86,9 +160,18 @@ export function Today({ locale, timezone }: TodayProps) {
           ) : (
             <ul className="item-list">
               {quick.map((entry) => (
-                <li key={entry.id} className="item">
+                <li key={entry.id} className="item item--with-action">
                   <span className="item__dot" aria-hidden="true" />
                   <span className="item__title">{entry.body}</span>
+                  {/* This tap is the only thing in the app that may raise the location prompt.
+                      Asking on launch, for a feature never used, spends it for nothing. */}
+                  <button
+                    type="button"
+                    className="button button--quiet button--small"
+                    onClick={() => void pinHere(entry.id)}
+                  >
+                    {t('nearby.pin')}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -107,7 +190,7 @@ export function Today({ locale, timezone }: TodayProps) {
                 <li key={item.trigger.id} className="item">
                   <span className="item__dot" data-overdue={item.overdue} aria-hidden="true" />
                   <span className="item__title">
-                    {label(item, t('notify.entry.title'), (name) =>
+                    {label(item.target, t('notify.entry.title'), (name) =>
                       t('notify.person.title', { name }),
                     )}
                   </span>
@@ -121,6 +204,33 @@ export function Today({ locale, timezone }: TodayProps) {
           )}
         </div>
       </div>
+
+      {/* There is no geofencing on the web, so this card *is* the feature: pinned notes surface
+          when the app is opened somewhere near them, and never otherwise. */}
+      {nearby.length > 0 && (
+        <div className="card" style={{ marginBlockStart: 'var(--gap)' }}>
+          <span className="card__label">{t('nearby.heading')}</span>
+          <ul className="item-list">
+            {nearby.map((pin) => (
+              <li key={pin.trigger.id} className="item">
+                <span className="item__dot" aria-hidden="true" />
+                <span className="item__title">
+                  {label(pin.target, t('notify.entry.title'), (name) =>
+                    t('notify.person.title', { name }),
+                  )}
+                </span>
+                <span className="item__time item__body">{formatDistance(pin.distanceM)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {positionProblem && (
+        <p className="card empty" style={{ marginBlockStart: 'var(--gap)' }}>
+          {t(`nearby.${positionProblem}`)}
+        </p>
+      )}
 
       {/* Only rendered when there is something to say — `briefingsBetween` returns nothing for a
           matched person with no recorded facts, so this card cannot appear empty. */}
