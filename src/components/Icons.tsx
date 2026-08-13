@@ -1,8 +1,8 @@
 /**
  * Inline SVG icons.
  *
- * Hand-drawn rather than pulled from an icon package: the app needs five glyphs, and a dependency
- * for that would cost more bundle than the whole set. `currentColor` throughout so the active tab
+ * Hand-drawn rather than pulled from an icon package: the app needs a handful of glyphs, and a
+ * dependency for that would cost more bundle than the whole set. `currentColor` throughout so the active tab
  * and the header states need no icon variants.
  *
  * None of them are directional, so nothing here needs mirroring under RTL.
@@ -68,6 +68,19 @@ export function BellIcon({ size = 21, active = false }: IconProps & { active?: b
       <path d="M18 15.5V10.5a6 6 0 10-12 0v5l-1.5 2.5h15L18 15.5z" />
       <path d="M9.8 20.5a2.4 2.4 0 004.4 0" />
       {active && <circle cx="18" cy="6" r="2.6" fill="currentColor" stroke="none" />}
+    </svg>
+  );
+}
+
+export function PeopleIcon({ size = 22 }: IconProps) {
+  return (
+    <svg {...base(size)}>
+      {/* Two overlapping figures, the rear one clipped by the front — reads as "people" at 22px
+          where a crowd of three does not. */}
+      <circle cx="9.5" cy="8.5" r="3.5" />
+      <path d="M3.5 19.5c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <path d="M16 5.6a3.5 3.5 0 010 5.8" />
+      <path d="M17.5 13.9c1.8.8 3 2.6 3 4.6" />
     </svg>
   );
 }

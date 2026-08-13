@@ -359,3 +359,98 @@ indefinitely — and that history is only collectable as it happens.
 
 Deliberately not auto-deleted on a high count. Retiring a subscription silently disables the user's
 reminders with no way for them to notice, which is worse than a row with a big number in it.
+
+---
+
+# Phase 2 — People, Facts and cadence
+
+## A cadence rule carries its own hour
+
+`TriggerCondition`'s `cadence` arm was a placeholder in Phase 1: `{ personId, days }`. Implementing
+it that way does not work, and the failure is silent.
+
+The desired fire time comes from `lastInteractionAt + days`, which inherits whatever *minute* the
+last interaction was logged at. Log a catch-up at 23:40 on a monthly cadence and the next nudge
+wants 23:40 — inside the default quiet window. Because the engine suppresses rather than shifts, the
+trigger is refused and never created. The user would see some people getting nudges and others not,
+with nothing on any screen to explain the difference.
+
+So the rule now carries `atMinuteOfDay` and `timezone`, defaulting to 09:00 local. This is a data
+model change, which the brief says to ask about — raised as a note rather than a question because no
+row could exist yet: nothing in Phase 1 could write a cadence condition.
+
+## An overdue cadence resolves to today, not to the next multiple of the interval
+
+If the last contact was two months ago on a three-week cadence, the arithmetic answer is the next
+21-day boundary. That is the wrong answer. The reason the reminder exists is that contact has
+lapsed, so the lapse is what needs acting on — the nudge lands today if the preferred hour is still
+ahead, tomorrow otherwise.
+
+Snapping to the preferred hour is also allowed to be a few hours *early* rather than a whole day
+late. "Every two weeks" was approximate when it was set; 13 days and 20 hours honours it better than
+14 days and 9 hours does.
+
+## Mentions are derived, never stored
+
+Nothing tags a note with a person at capture time. Instead `matchPeopleIn` intersects the person's
+name tokens with `Entry.searchTokens` on read.
+
+Three reasons, in order of weight:
+
+1. **Capture must not slow down.** An "is this about Sarah?" prompt is exactly the friction the
+   brief spends its first paragraph warning about.
+2. **It works backwards.** Add someone today and every note that ever named them appears on their
+   screen. A stored tag could only ever cover notes written after the person existed, which is the
+   wrong half.
+3. **Hebrew comes free.** Particles attach directly to the following word, so "to Sarah" is one
+   token — and the tokeniser already emits the prefix-stripped stem, so `לשרה` and `שרה` match.
+   Substring matching would find `שרה` inside unrelated words; token equality does not.
+
+The cost is that a common single-word name over-matches. Accepted: mentions only ever *show* things,
+never schedule anything, and aliases are the knob for fixing it.
+
+Consequence worth noting: this is why `LinkRelation` gained no new members. `mentions` and `attends`
+edges were drafted and then deleted, because deriving them made the rows dead schema.
+
+## Meeting attendees are read out of the event title
+
+"Dinner with Alex" already says who it is with. An explicit attendee field would be more precise and
+would also be one more thing to maintain on every event, forever, to get a benefit the title already
+provides. When the guess is wrong the fix is an alias, a control that exists anyway.
+
+A private event is not mined for names, and gets no briefing: its title is precisely the thing the
+flag exists to keep off a lock screen.
+
+## The notification carries one fact, not a briefing
+
+`composeNotification` appends the single highest-ranked fact from the first matched attendee. Two
+would turn a glanceable line into a document, and a notification body is one line on a lock screen.
+
+Ranking is `milestone > preference > gift-idea > relation > misc`, then confidence, then recency. A
+milestone is news and it dates, which makes it the best thing to be reminded of before seeing
+someone; a gift idea only matters near an occasion the app cannot detect.
+
+## Relative dates go through `Intl.RelativeTimeFormat`
+
+Not through translation strings with `{{count}}` in them. Hebrew's plural categories are not
+English's — CLDR gives it `one`, `two`, `many` and `other`, so two of anything takes its own form —
+and a hand-written string gets that wrong in a way that reads as broken grammar to a native speaker.
+
+Delegating also produces things no translation table would have: `-2` days in Hebrew renders as
+`שלשום`, the specific word for the day before yesterday.
+
+## Bugs this phase surfaced in Phase 1 code
+
+**The tokeniser lost possessives.** Eliding the apostrophe in "Sarah's" produced the token `sarahs`,
+so a search for "Sarah" could not find a note about Sarah's birthday. The elision rule exists for
+Hebrew geresh in acronyms (`צה״ל` → `צהל`) and was over-applied. English possessives are now removed
+*before* elision, guarded on a preceding Latin letter so Hebrew is untouched. Two tests that pinned
+the old output were rewritten.
+
+**`anyOf` over a multiEntry index returns duplicates.** One row per matching token, so a two-word
+name returned each entry twice. `searchEntries` deliberately exploits exactly that as its relevance
+score, so the fix belonged in the new caller rather than the shared query.
+
+**`.followup` is a wrapping row, not a column.** Reusing it for the fact form sized the text input to
+its content instead of stretching it. Found by looking at a screenshot, not by any assertion —
+`.followup--sheet` is the stretched variant.

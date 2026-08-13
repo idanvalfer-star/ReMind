@@ -16,6 +16,8 @@ import type { Lang } from '../db/schema';
 import { groupByLocalDay, eventsBetween } from '../calendar/events';
 import { monthGrid, weekDays, weekdayLabels } from '../calendar/monthGrid';
 import { todayItems, unscheduledEntries, type TodayItem } from '../engine/today';
+import { startOfNextLocalDay } from '../engine/time';
+import { briefingsBetween } from '../people/briefing';
 
 export interface TodayProps {
   locale: Lang;
@@ -44,6 +46,12 @@ export function Today({ locale, timezone }: TodayProps) {
   // a refresh.
   const items = useLiveQuery(() => todayItems(timezone), [timezone], undefined);
   const quick = useLiveQuery(() => unscheduledEntries(4), [], undefined);
+  // Only what is still ahead: a briefing for a meeting that already happened is not a briefing.
+  const briefings = useLiveQuery(
+    () => briefingsBetween(now, startOfNextLocalDay(now, timezone)),
+    [timezone],
+    undefined,
+  );
 
   const week = weekDays(timezone, now);
   const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone }).format(new Date(now));
@@ -113,6 +121,31 @@ export function Today({ locale, timezone }: TodayProps) {
           )}
         </div>
       </div>
+
+      {/* Only rendered when there is something to say — `briefingsBetween` returns nothing for a
+          matched person with no recorded facts, so this card cannot appear empty. */}
+      {briefings !== undefined && briefings.length > 0 && (
+        <div className="card" style={{ marginBlockStart: 'var(--gap)' }}>
+          <span className="card__label">{t('people.briefing')}</span>
+          {briefings.map((briefing) => (
+            <div key={briefing.event.id} style={{ marginBlockStart: '0.5rem' }}>
+              <div className="item__time">
+                {formatTime(briefing.event.startAt)} · {briefing.event.title}
+              </div>
+              <ul className="item-list">
+                {briefing.people.map(({ person, facts }) =>
+                  facts.slice(0, 2).map((fact) => (
+                    <li key={fact.id} className="item item--fact">
+                      <span className="fact-kind">{person.name}</span>
+                      <span className="item__title">{fact.body}</span>
+                    </li>
+                  )),
+                )}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="card" style={{ marginBlockStart: 'var(--gap)' }}>
         <span className="card__label">{t('today.week')}</span>

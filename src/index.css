@@ -28,6 +28,7 @@
   --on-accent: #ffffff;
 
   --overdue: #f5a524;
+  --danger: #e5484d;
   --dot: #4d8dff;
 
   --radius: 14px;
@@ -246,6 +247,13 @@ main {
   font-size: 0.85rem;
 }
 
+/* Only for the second tap of a destructive two-step, never for the first. */
+.button--danger {
+  background: var(--danger);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -255,6 +263,11 @@ main {
 .field__label {
   font-size: 0.8rem;
   color: var(--text-dim);
+}
+
+.field__help {
+  font-size: 0.75rem;
+  color: var(--text-faint);
 }
 
 .field__input {
@@ -394,6 +407,51 @@ input[type='range']:focus-visible {
   flex-direction: column;
   gap: 0.25rem;
   align-items: stretch;
+}
+
+/* ---------------------------------------------------------------- people */
+
+/*
+ * A whole list row that is also a button. The control chrome is reset rather than the row being
+ * wrapped in a link, so the entire card is the tap target — 44px-plus without needing a
+ * min-height, because the two stacked lines already exceed it.
+ */
+.person-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  align-items: stretch;
+  inline-size: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+/* Scoped rather than styling every [data-overdue] span, so the dot keeps its own rule. */
+.item__body [data-overdue='true'] {
+  color: var(--overdue);
+}
+
+/* Three columns: kind pill, the fact itself, and the delete control. */
+.item--fact {
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+}
+
+.fact-kind {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  background: var(--card-raised);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- week strip */

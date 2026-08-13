@@ -132,6 +132,79 @@ const results = (await page.locator('.item-list').textContent().catch(() => ''))
 log(/Dinner with Alex tomorrow at 8pm/.test(results), 'search finds the entry by its original words', results.trim().slice(0, 90));
 await page.screenshot({ path: `${OUT}/08-search.png` });
 
+// ---------------------------------------------------------------- people
+await page.locator('.tabbar__tab', { hasText: 'People' }).click();
+await page.waitForTimeout(500);
+log(/Nobody yet/i.test((await page.locator('main').textContent()) ?? ''), 'people starts empty');
+
+// Add someone with an alias and a cadence. The alias is the knob that makes mention matching
+// work when a note uses a nickname.
+await page.locator('button', { hasText: 'Add someone' }).click();
+await page.waitForTimeout(300);
+await page.fill('.field__input >> nth=0', 'Alex Cohen');
+await page.fill('.field__input >> nth=1', 'Alex');
+await page.locator('button', { hasText: 'Every 2 weeks' }).click();
+await page.locator('button', { hasText: 'Save' }).click();
+await page.waitForTimeout(900);
+
+const peopleList = (await page.locator('main').textContent()) ?? '';
+log(/Alex Cohen/.test(peopleList), 'the person appears in the list', peopleList.trim().slice(0, 80));
+log(/Due in/i.test(peopleList), 'the cadence status is shown', peopleList.trim().slice(0, 120));
+await page.screenshot({ path: `${OUT}/12-people-list.png` });
+
+// Open the detail view.
+await page.locator('.person-row').first().click();
+await page.waitForTimeout(700);
+const detail = (await page.locator('main').textContent()) ?? '';
+log(/What you know/i.test(detail), 'person detail renders');
+// The alias matches the earlier capture "Dinner with Alex tomorrow at 8pm", which was written
+// before this person existed — the case derived mentions exist to handle.
+log(/Dinner with Alex/.test(detail), 'notes written before the person was added are found', detail.trim().slice(0, 140));
+await page.screenshot({ path: `${OUT}/13-person-detail.png` });
+
+// Record a fact, then confirm it lands with its kind.
+await page.fill('.followup .field__input', 'drinks coffee black');
+await page.locator('.followup button', { hasText: 'Preference' }).click();
+await page.locator('.followup button', { hasText: 'Save' }).click();
+await page.waitForTimeout(800);
+const withFact = (await page.locator('main').textContent()) ?? '';
+log(/drinks coffee black/.test(withFact), 'the fact is recorded', withFact.trim().slice(0, 120));
+log(await page.locator('.fact-kind').first().isVisible(), 'the fact shows its kind');
+await page.screenshot({ path: `${OUT}/14-person-fact.png` });
+
+// Logging a catch-up must move the cadence status off "due".
+await page.locator('button', { hasText: 'We caught up' }).click();
+await page.waitForTimeout(900);
+log(/Last catch-up/i.test((await page.locator('main').textContent()) ?? ''), 'a catch-up is recorded');
+
+// ---------------------------------------------------------------- meeting briefing
+// The briefing card only covers the rest of *today*, and the dinner captured earlier is
+// tomorrow — so an event later today has to exist for this path to be exercised at all rather
+// than silently skipped. Scheduled at 23:00 local so it stays ahead of "now" whenever this runs.
+await page.locator('.tabbar__tab', { hasText: 'Calendar' }).click();
+await page.waitForTimeout(700);
+await page.locator(".month-grid__day[data-today='true']").click();
+await page.locator('button', { hasText: 'Add event' }).click();
+await page.waitForTimeout(300);
+
+const todayLocal = await page.evaluate(() =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date()),
+);
+await page.fill('.followup--sheet .field__input >> nth=0', 'Coffee with Alex');
+await page.fill(".followup--sheet input[type='datetime-local'] >> nth=0", `${todayLocal}T23:00`);
+await page.locator('.followup--sheet button', { hasText: 'Save' }).click();
+await page.waitForTimeout(900);
+
+await page.locator('.tabbar__tab', { hasText: 'Today' }).click();
+await page.waitForTimeout(1000);
+const today = (await page.locator('main').textContent()) ?? '';
+log(/Before you meet/i.test(today), 'the briefing card appears for a meeting later today', today.trim().slice(0, 60));
+log(
+  /drinks coffee black/.test(today),
+  'the briefing surfaces the fact about whoever the meeting is with',
+);
+await page.screenshot({ path: `${OUT}/15-today-briefing.png` });
+
 // ---------------------------------------------------------------- settings + RTL
 await page.locator('.tabbar__tab', { hasText: 'Settings' }).click();
 await page.waitForTimeout(700);
@@ -150,6 +223,20 @@ log(dir === 'rtl', 'switching to Hebrew sets dir=rtl', `dir=${dir} lang=${lang}`
 const heText = (await page.locator('.tabbar').textContent()) ?? '';
 log(/הגדרות/.test(heText), 'tab labels are translated', heText.trim());
 await page.screenshot({ path: `${OUT}/10-hebrew-rtl.png` });
+
+// The People screen in RTL. Its rows mix a Latin name with Hebrew status text, which is exactly
+// where a layout built on physical rather than logical properties falls apart.
+await page.locator('.tabbar__tab', { hasText: 'אנשים' }).click();
+await page.waitForTimeout(600);
+const hePeople = (await page.locator('main').textContent()) ?? '';
+log(/Alex Cohen/.test(hePeople), 'people renders under RTL', hePeople.trim().slice(0, 70));
+await page.locator('.person-row').first().click();
+await page.waitForTimeout(700);
+log(
+  /מה שאתה יודע/.test((await page.locator('main').textContent()) ?? ''),
+  'person detail is translated',
+);
+await page.screenshot({ path: `${OUT}/16-hebrew-people.png` });
 
 // Hebrew capture, in RTL, end to end.
 await page.locator('.tabbar__tab', { hasText: 'היום' }).click();

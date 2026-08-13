@@ -20,19 +20,22 @@ import {
   BellIcon,
   CalendarIcon,
   CheckCircleIcon,
+  PeopleIcon,
   SearchIcon,
   SettingsIcon,
 } from './components/Icons';
 import { InstallSheet } from './components/InstallSheet';
+import { People } from './components/People';
 import { Search } from './components/Search';
 import { Settings } from './components/Settings';
 import { Today } from './components/Today';
 
-type View = 'today' | 'calendar' | 'search' | 'settings';
+type View = 'today' | 'calendar' | 'people' | 'search' | 'settings';
 
 const VIEWS: { id: View; Icon: (props: { size?: number }) => ReactElement }[] = [
   { id: 'today', Icon: CheckCircleIcon },
   { id: 'calendar', Icon: CalendarIcon },
+  { id: 'people', Icon: PeopleIcon },
   { id: 'search', Icon: SearchIcon },
   { id: 'settings', Icon: SettingsIcon },
 ];
@@ -126,6 +129,7 @@ export function App() {
           </>
         )}
         {view === 'calendar' && ready && <Calendar locale={locale} timezone={timezone} />}
+        {view === 'people' && ready && <People locale={locale} />}
         {view === 'search' && ready && <Search locale={locale} timezone={timezone} />}
         {view === 'settings' && ready && (
           <Settings locale={locale} onLocaleChange={handleLocaleChange} />
