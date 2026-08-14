@@ -10,7 +10,9 @@ import { useEffect, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import { db, type ID, type Lang } from '../db/schema';
-import { searchEntries, type SearchHit } from '../search/search';
+import { hybridSearch, type HybridHit } from '../search/search';
+import { activeProvider } from '../search/embedding';
+import type { EmbeddingProvider } from '../search/embedding';
 import { enrol, unenrol } from '../spaced/review';
 
 export interface SearchProps {
@@ -24,7 +26,20 @@ const DEBOUNCE_MS = 150;
 export function Search({ locale, timezone }: SearchProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-  const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [hits, setHits] = useState<HybridHit[] | null>(null);
+  // Resolved once and held, so a 130 MB model is loaded on the first search rather than on every
+  // keystroke. `null` means "not enabled or not available", which is the ordinary case.
+  const [provider, setProvider] = useState<EmbeddingProvider | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void activeProvider().then((resolved) => {
+      if (!cancelled) setProvider(resolved);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -33,7 +48,7 @@ export function Search({ locale, timezone }: SearchProps) {
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      void searchEntries(query).then((results) => {
+      void hybridSearch(query, provider).then((results) => {
         // A slow query for an abandoned term must not overwrite a newer one's results.
         if (!cancelled) setHits(results);
       });
@@ -43,7 +58,7 @@ export function Search({ locale, timezone }: SearchProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, provider]);
 
   /**
    * Which entries are already in the review rotation.
@@ -94,6 +109,11 @@ export function Search({ locale, timezone }: SearchProps) {
                 <div className="item__time">{formatDate(hit.entry.capturedAt)}</div>
                 {/* The body as captured, not the parsed title. */}
                 <div className="item__title">{hit.entry.body}</div>
+                {/* Said out loud when a result has no matching words in it, because otherwise a
+                    correct semantic hit looks like a bug. */}
+                {!hit.sources.includes('keyword') && (
+                  <div className="item__time">{t('semantic.badge')}</div>
+                )}
                 {/* Search is where enrolment belongs: you have just gone looking for something, which
                     is the moment you know whether it is worth keeping in front of you. */}
                 <RotationToggle entryId={hit.entry.id} enrolled={enrolled.has(hit.entry.id)} />

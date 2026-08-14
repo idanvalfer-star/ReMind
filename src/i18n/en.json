@@ -358,5 +358,19 @@
     "hoursUnit": "{{hours}} h",
     "whenBusy": "When your days fill up",
     "note": "Nothing here changes what the app does on its own. If a type of reminder is not working for you, the settings above are how to change it."
+  },
+  "semantic": {
+    "heading": "Search by meaning",
+    "explain": "Finds a note even when you cannot remember the words in it. Everything runs on this device — no note is ever sent anywhere.",
+    "cost": "One-time download of about {{mb}} MB. It works offline afterwards, and English and Hebrew both.",
+    "enable": "Turn it on",
+    "disable": "Turn it off",
+    "downloading": "Downloading the model… {{percent}}",
+    "indexing": "Reading your notes… {{done}} of {{total}}",
+    "ready": "Ready · {{done}} of {{total}} notes indexed",
+    "failed": "The model could not be loaded. Keyword search still works.",
+    "evicted": "The model is no longer on this device. Turn it on again to re-download it.",
+    "reindex": "Index the rest",
+    "badge": "by meaning"
   }
 }

@@ -16,7 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 
 /** Bumped whenever `stores()` changes. Also stamped into JSON exports. */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 
 // ---------------------------------------------------------------- primitives
 
@@ -228,6 +228,34 @@ export interface PackItem {
   createdAt: EpochMs;
 }
 
+// ---------------------------------------------------------------- semantic search
+
+/**
+ * One entry's embedding vector.
+ *
+ * A separate table rather than a field on `Entry` for three reasons that all point the same way:
+ *
+ * - An embedding is derived data. Losing the whole table costs a re-index, not a memory.
+ * - It is bulky next to the rest of an `Entry`, and every query that reads entries — search,
+ *   mention matching, the review queue — would carry a kilobyte and a half per row it does not use.
+ * - `TABLE_NAMES` drives the JSON backup, and this table is deliberately excluded from it. A backup
+ *   should hold what you wrote, not several megabytes of floats that can be recomputed.
+ */
+export interface Embedding {
+  /** The Entry's id. One vector per entry, so the entry id *is* the primary key. */
+  entryId: ID;
+  /**
+   * Which model produced it. Vectors from different models are not comparable, so a model change
+   * invalidates the index rather than silently returning nonsense.
+   */
+  model: string;
+  /** Unit-normalised at index time, so search is a dot product. */
+  vector: Float32Array;
+  /** What the vector was computed from, so an edited Entry can be detected as stale. */
+  bodyHash: string;
+  createdAt: EpochMs;
+}
+
 // ---------------------------------------------------------------- resurfacing
 
 export type TriggerKind = 'time' | 'event-adjacent' | 'cadence' | 'spaced';
@@ -384,6 +412,13 @@ export interface Settings {
   /** Nag for a JSON backup after this many days. iOS can evict IndexedDB. */
   backupReminderDays: number;
   digest: DigestSettings;
+  /**
+   * Whether the on-device embedding model may be downloaded and used.
+   *
+   * Off by default and never enabled implicitly. Turning it on costs a ~130 MB one-time download, and
+   * a feature that silently spends that much of someone's data allowance is not a feature.
+   */
+  semanticSearchEnabled: boolean;
   onboarding: {
     dismissedInstallSheet: boolean;
     /** True once the user has been asked for notification permission in standalone. */
@@ -427,6 +462,7 @@ export class ReMindDB extends Dexie {
   triggers!: Table<Trigger, ID>;
   triggerFires!: Table<TriggerFire, ID>;
   links!: Table<Link, ID>;
+  embeddings!: Table<Embedding, ID>;
   settings!: Table<Settings, 'singleton'>;
   pushRegistration!: Table<PushRegistration, 'singleton'>;
 
@@ -471,6 +507,13 @@ export class ReMindDB extends Dexie {
       // `[tripId+isReturnLeg]` is the list query: the outbound list and the return checklist are
       // separate screens over one table, and neither should filter the other in memory.
       packItems: 'id, tripId, [tripId+isReturnLeg], [tripId+category], packed, isReturnLeg, label',
+    });
+
+    // v4 — semantic search. `entryId` is the primary key rather than a separate id: there is exactly
+    // one current vector per entry, and making that a schema property means a re-index overwrites
+    // rather than accumulating stale rows nobody would ever notice.
+    this.version(4).stores({
+      embeddings: 'entryId, model, createdAt',
     });
   }
 }

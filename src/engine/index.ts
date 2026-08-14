@@ -32,6 +32,7 @@ import { desiredFireAt, type TriggerTargets } from './evaluate';
 import { recordResponse } from './log';
 import { resolveFireTime, type ScheduleContext, type SuppressionReason } from './schedule';
 import {
+  canInterrupt,
   deleteSubscription,
   pendingPushes,
   reconcilePushes,
@@ -154,7 +155,12 @@ export async function registerTrigger(input: RegisterTriggerInput): Promise<Regi
   const desired = desiredFireAt(input.condition, await triggerTargets(input.condition));
   if (desired === null) return { kind: 'missing-target' };
 
-  const decision = resolveFireTime(desired, await scheduleContext());
+  // Quiet hours and the cap govern interruptions. A kind that can never interrupt — see
+  // `canInterrupt` — is not subject to them: applying them meant a note enrolled for review at 05:00
+  // was silently refused for falling inside the default quiet window.
+  const decision = canInterrupt(input.condition.kind)
+    ? resolveFireTime(desired, await scheduleContext())
+    : ({ kind: 'scheduled', fireAt: desired } as const);
   if (decision.kind === 'suppressed') {
     return {
       kind: 'suppressed',

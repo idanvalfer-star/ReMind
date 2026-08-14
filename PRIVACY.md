@@ -79,6 +79,21 @@ If you would rather not, do not tap it. Every packing list works without a forec
 the weather-driven lines, and each line it does add is labelled `weather` so you can see exactly what
 the forecast changed.
 
+### Search by meaning runs on your device
+
+Semantic search needs an embedding model. Every commercial option is an HTTP call that sends your note
+text to somebody else's server, which is the one thing this whole design exists to avoid — so ReMind
+downloads a model and runs it locally, in your browser, in WebAssembly.
+
+The consequence is a one-time download of about 130 MB, which is why the feature is **off by default**
+and the size is stated on the button before anything starts. After that it works with the radio off.
+
+What is sent when you use it: **nothing.** Not the query, not the note, not the fact that you searched.
+The model files come from the public Hugging Face CDN when you enable it, which reveals that you
+downloaded a model and nothing about what you do with it. The vectors it produces are stored in
+IndexedDB and are excluded from the JSON backup — they are derived data, and a backup should hold what
+you wrote rather than megabytes of recomputable floats.
+
 ---
 
 ## What this *does* reveal

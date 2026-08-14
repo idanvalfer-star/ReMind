@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ReMind — a proactive personal memory assistant. Installable PWA, local-first, zero-knowledge push.",
+  "description": "ReMind \u2014 a proactive personal memory assistant. Installable PWA, local-first, zero-knowledge push.",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -19,6 +19,7 @@
     "vapid:generate": "node scripts/generate-vapid-keys.mjs"
   },
   "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
     "chrono-node": "^2.7.7",
     "dexie": "^4.0.11",
     "dexie-react-hooks": "^1.1.7",
@@ -47,5 +48,9 @@
     "workbox-routing": "^7.3.0",
     "workbox-strategies": "^7.3.0",
     "wrangler": "^4.120.1"
+  },
+  "overrides": {
+    "adm-zip": "^0.6.0",
+    "sharp": "^0.35.0"
   }
 }

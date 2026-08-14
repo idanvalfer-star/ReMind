@@ -123,8 +123,16 @@ describe('desiredFireAt — spaced', () => {
     expect(desiredFireAt(spaced(6), {}, START)).toBe(Date.UTC(2026, 5, 16, 8, 0));
   });
 
-  it('is due on the review day itself for a zero interval', () => {
-    expect(desiredFireAt(spaced(0), {}, START)).toBe(Date.UTC(2026, 5, 10, 8, 0));
+  it('is due at the review instant itself for a zero interval, unsnapped', () => {
+    // Enrolling something you want to see must not hide it until the next digest hour — and for
+    // anyone enrolling before that hour, snapping would mean "due later today" rather than now.
+    expect(desiredFireAt(spaced(0), {}, START)).toBe(START);
+  });
+
+  it('is due now even when the digest hour is still ahead on the same day', () => {
+    // 05:00Z, with a digest at 08:00. The regression this pins only appears before the digest hour.
+    const earlyMorning = Date.UTC(2026, 5, 10, 5, 0);
+    expect(desiredFireAt(spaced(0, earlyMorning), {}, earlyMorning)).toBe(earlyMorning);
   });
 
   it('snaps to the digest hour rather than the minute the review was answered', () => {

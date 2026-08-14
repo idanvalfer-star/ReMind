@@ -17,6 +17,19 @@ export default defineConfig({
       filename: 'sw.ts',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        /**
+         * Keep the embedding model's runtime out of the precache.
+         *
+         * `transformers.web-*.js` is 568 KB and `ort-wasm-*.wasm` is 23 MB. Both are reached only
+         * through a dynamic import behind an opt-in setting, but Workbox globs the whole `dist`
+         * directory — so without this, *every* user downloads the ONNX runtime on first visit for a
+         * feature almost none of them will turn on. That would also break the "launch to capture
+         * under one second" requirement on a slow connection.
+         *
+         * The cost of excluding them is that semantic search needs a connection the first time it is
+         * enabled, which is true anyway: that is when the 130 MB model is fetched.
+         */
+        globIgnores: ['**/transformers.web-*.js', '**/ort-wasm*'],
       },
       // The user decides when to take an update; a silent reload can eat an
       // in-progress capture.

@@ -21,6 +21,7 @@ import { registerForPush } from '../install/push';
 import { parseHHmm } from '../engine/time';
 import { enrolledCount, ensureDigestArmed } from '../spaced/review';
 import { Insights } from './Insights';
+import { SemanticSetting } from './SemanticSetting';
 
 export interface SettingsProps {
   locale: Lang;
@@ -297,6 +298,13 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
           {message}
         </p>
       )}
+      <div style={{ marginBlockStart: 'var(--gap)' }}>
+        <SemanticSetting
+          enabled={settings.semanticSearchEnabled}
+          onChange={(next) => patch({ semanticSearchEnabled: next })}
+        />
+      </div>
+
       <Insights locale={locale} timezone={timezone} />
     </section>
   );

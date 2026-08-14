@@ -60,7 +60,12 @@ export function desiredFireAt(
     case 'cadence':
       return cadenceFireAt(condition, targets.person, now);
 
-    case 'spaced':
+    case 'spaced': {
+      // A zero interval means *now*, unsnapped. Snapping it would hide a note the user has just
+      // asked to see until the next digest hour — and for anyone enrolling before that hour, "due
+      // immediately" would silently mean "due later today", which is not what the button says.
+      if (condition.intervalDays <= 0) return condition.lastReviewedAt;
+
       // Derived from the last review rather than stored, so changing the interval takes effect
       // without a second write. Snapped to the digest hour, because a note due "in six days" should
       // arrive with that morning's digest and not at whatever minute the last review was answered.
@@ -69,5 +74,6 @@ export function desiredFireAt(
         condition.timezone,
         condition.atMinuteOfDay,
       );
+    }
   }
 }

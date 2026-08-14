@@ -11,6 +11,7 @@
  */
 
 import { db, DB_VERSION, TABLE_NAMES, type TableName } from '../db/schema';
+import { clearIndex } from '../search/semantic';
 
 export const BACKUP_FORMAT = 'remind.backup';
 
@@ -101,6 +102,12 @@ export async function importBackup(raw: string): Promise<ImportResult> {
 
   const known = new Set<string>(TABLE_NAMES);
   const skippedTables = Object.keys(parsed.tables).filter((name) => !known.has(name));
+
+  // The embedding index is derived data keyed by Entry id, and a restore replaces every Entry with
+  // rows carrying different ids. Left alone it would read as a complete index that matches nothing.
+  // Cleared outside the transaction because `embeddings` is deliberately not in `TABLE_NAMES` — a
+  // backup holds what you wrote, not megabytes of recomputable floats.
+  await clearIndex();
 
   let restored = 0;
   await db.transaction('rw', TABLE_NAMES.map((name) => db.table(name)), async () => {

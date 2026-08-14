@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db, type Entry } from '../db/schema';
 import { tokenize } from '../db/tokenize';
-import { searchEntries } from './search';
+import { hybridSearch, searchEntries } from './search';
+import { indexPending } from './semantic';
+import { fakeEmbeddingProvider } from '../test/fakeEmbedding';
 
 async function addEntry(body: string, capturedAt: number): Promise<Entry> {
   const entry: Entry = {
@@ -19,7 +21,7 @@ async function addEntry(body: string, capturedAt: number): Promise<Entry> {
 
 beforeEach(async () => {
   await db.open();
-  await db.entries.clear();
+  await Promise.all([db.entries.clear(), db.embeddings.clear()]);
 });
 
 describe('searchEntries', () => {
@@ -93,5 +95,63 @@ describe('searchEntries', () => {
     await addEntry('Dinner dinner dinner with Alex', 1000);
     const hits = await searchEntries('dinner alex');
     expect(hits).toHaveLength(1);
+  });
+});
+
+describe('hybridSearch', () => {
+  const provider = fakeEmbeddingProvider();
+
+  it('is exactly keyword search when there is no provider', async () => {
+    // The ordinary case: semantic search is opt-in and most users never enable it.
+    await addEntry('Dinner with Alex', 1000);
+    const hits = await hybridSearch('alex', null);
+    expect(hits.map((hit) => hit.entry.body)).toEqual(['Dinner with Alex']);
+    expect(hits[0]!.sources).toEqual(['keyword']);
+  });
+
+  it('finds a note by meaning that keyword search misses entirely', async () => {
+    await addEntry('the ceramic vase Sarah liked', 1000);
+    await indexPending(provider);
+
+    const keywordOnly = await searchEntries('pottery');
+    expect(keywordOnly).toEqual([]);
+
+    const hybrid = await hybridSearch('pottery', provider);
+    expect(hybrid.map((hit) => hit.entry.body)).toEqual(['the ceramic vase Sarah liked']);
+    expect(hybrid[0]!.sources).toEqual(['semantic']);
+  });
+
+  it('marks a hit found by both rankers', async () => {
+    await addEntry('a ceramic vase', 1000);
+    await indexPending(provider);
+    const hits = await hybridSearch('ceramic', provider);
+    expect(hits[0]!.sources).toEqual(['keyword', 'semantic']);
+  });
+
+  it('keeps keyword results when the provider throws', async () => {
+    // The model can be missing, evicted by iOS, or mid-download. None of those should turn the
+    // search box into an error message.
+    await addEntry('Dinner with Alex', 1000);
+    const broken = {
+      model: 'fake-v1',
+      dimensions: 5,
+      embed: async () => {
+        throw new Error('model evicted');
+      },
+    };
+    const hits = await hybridSearch('alex', broken);
+    expect(hits.map((hit) => hit.entry.body)).toEqual(['Dinner with Alex']);
+  });
+
+  it('returns nothing for a query neither ranker matches', async () => {
+    await addEntry('Dinner with Alex', 1000);
+    await indexPending(provider);
+    expect(await hybridSearch('submarine', provider)).toEqual([]);
+  });
+
+  it('honours the limit across both rankers', async () => {
+    for (let i = 0; i < 6; i++) await addEntry(`ceramic vase ${i}`, 1000 + i);
+    await indexPending(provider);
+    expect(await hybridSearch('ceramic', provider, 3)).toHaveLength(3);
   });
 });

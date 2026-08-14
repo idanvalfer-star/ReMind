@@ -724,3 +724,102 @@ designed was being reported as a notification failure.
 particular is the notification *about* the queue it would have been listed beside.
 
 Found by looking at a screenshot. Three tests pin it.
+
+## Semantic search runs on-device, and the cost of that is stated out loud
+
+The obvious implementation is an embedding API: one HTTP call, no download, better quality. It was
+never a real option — it would send note text to somebody else's server, which is the single thing this
+codebase is organised around not doing.
+
+So the model runs locally in WASM, and the honest price is a ~130 MB one-time download. That shapes
+three decisions:
+
+- **Off by default**, with the size on the card before anything is fetched. A toggle labelled
+  "semantic search" that quietly spends 130 MB of somebody's data allowance is not a feature.
+- **`multilingual-e5-small`**, not a 23 MB English-only model. Half the point of this app is that it
+  works in Hebrew, and an English-only model would silently make the Hebrew half worse than keyword
+  search.
+- **Lazily imported.** The precache excludes the transformers chunk (568 KB) and the ONNX runtime
+  (23 MB) via `globIgnores`. Workbox globs all of `dist`, so without that exclusion every user would
+  download the ONNX runtime on first visit for a feature almost none of them enable — which would also
+  end "launch to capture under one second". Measured: the launch precache went 538 KB → 546 KB, so the
+  feature costs 8 KB to users who never turn it on.
+
+## Reciprocal Rank Fusion, not score normalisation
+
+Keyword search scores are term counts (1, 2, 3…) and semantic scores are cosines (0.31, 0.44…). There
+is no principled conversion between them, and every choice of one is a guess that silently decides
+which ranker wins.
+
+RRF throws the scores away and uses only positions: `1/(k + rank)`, summed. An item found by both
+rankers outranks one found well by either. It needs no tuning and cannot be broken by one ranker's
+scores drifting in scale. `k = 60` is the value from the original paper.
+
+## The similarity floor is 0.8, which is high on purpose
+
+Cosine similarity between two unrelated real sentences is not near zero. E5 embeds everything into a
+fairly tight cone, so unrelated notes score around 0.7. Without a floor, semantic search always
+returns something — and a search that can never say "nothing matched" cannot be trusted when it does
+return an answer.
+
+## Staleness is recomputed, never tracked
+
+`pendingEntries` derives what needs indexing by comparing each Entry's `bodyHash` and model against
+its stored vector. No cursor, no dirty flag.
+
+That falls out well in three cases that would each need their own bookkeeping otherwise: an index
+interrupted halfway resumes correctly, an edited note is re-embedded, and changing the model
+invalidates the whole index without a migration. The hash is FNV-1a rather than SHA-256 so the check
+stays synchronous — `crypto.subtle.digest` would make it async and force an await per row.
+
+## The two bugs the model-free tests could not have found
+
+Both were caught by the browser harness happening to run at a different hour than before, which is
+worth recording as a lesson about time-dependent bugs.
+
+**A zero interval was being snapped to the digest hour.** Enrolling a note set `intervalDays: 0`,
+meaning "due now" — and then `desiredFireAt` snapped it to 08:00 local. Before 08:00 that is the
+*future*, so a freshly enrolled note was invisible and the review card never appeared. A zero interval
+now returns the review instant unsnapped.
+
+**Quiet hours were being applied to spaced triggers.** `enrol` went through `registerTrigger`, which
+called `resolveFireTime`, which refused anything inside the 22:00–07:00 window. So enrolling a note at
+05:00 silently did nothing at all — no trigger, no error, no explanation.
+
+The fix is a single predicate, `canInterrupt(kind)`, which now governs both consequences of the same
+fact: a `spaced` trigger is never pushed *and* is not subject to quiet hours or the cap. Those
+constraints exist to govern interruptions, and something that cannot interrupt is not something to be
+quiet about. Previously that fact was stated once in a comment in `isPushWorthy` and contradicted by a
+comment in `enrol` claiming quiet hours did not apply — the comment was aspirational and the code
+disagreed with it.
+
+## What is verified, and the one thing that is not
+
+Everything except the model loader is tested against a deterministic fake provider: the vector
+arithmetic, RRF, batching, resumption after a failed batch, staleness detection, the similarity floor,
+the fallback when the provider throws, and the index being cleared on a backup restore.
+
+`loadOnDeviceProvider` — the dynamic import and the model download — **could not be executed here**.
+The sandbox blocks the Hugging Face CDN, so a query for it returns 000 while the npm registry returns
+200. It is roughly thirty lines, and it is written so that a failure surfaces as a message on the
+settings card rather than a broken search box: `activeProvider` returns `null`, `hybridSearch` catches
+a throwing provider, and keyword search keeps working in every case.
+
+The fake provider also taught something. Its first version gave every unrecognised text the same small
+uniform vector, so two unrelated notes scored a perfect 1.0 and a search for "submarine" matched a
+dinner reservation. A fake that does not preserve the property under test tests nothing.
+
+## The dependency advisories, and what was done about them
+
+`@huggingface/transformers` pulls in `onnxruntime-node` and `sharp` as hard dependencies — both
+Node-only, both with high-severity advisories, and at install time `npm audit` reported four with "no
+fix available".
+
+Neither package can execute in this app: the browser build uses `onnxruntime-web`, and there is no Node
+runtime in production. But they land on every dev machine and in CI, and `sharp` and `adm-zip` are
+exactly the shape of thing a supply-chain attack targets. Patched releases did exist upstream, so
+`package.json` pins them through `overrides` (`adm-zip@^0.6.0`, `sharp@^0.35.0`) and the audit is clean.
+
+Worth knowing: the emitted `ort-wasm-simd-threaded.asyncify.wasm` is 22.5 MiB against Cloudflare's
+25 MiB per-file asset limit. It is served, not precached, so users only fetch it if they enable the
+feature — but the headroom is about 2.5 MiB, and a future onnxruntime release could exceed it.

@@ -76,6 +76,7 @@ export function defaultSettings(): Settings {
     lastExportAt: null,
     backupReminderDays: DEFAULT_BACKUP_REMINDER_DAYS,
     digest: { ...DEFAULT_DIGEST },
+    semanticSearchEnabled: false,
     onboarding: {
       dismissedInstallSheet: false,
       completedPushPrompt: false,

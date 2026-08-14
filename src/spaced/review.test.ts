@@ -375,3 +375,33 @@ describe('ensureDigestArmed', () => {
     expect(await digestRow()).toBeUndefined();
   });
 });
+
+describe('enrolment is due immediately, whatever the hour', () => {
+  it('is due at once even when enrolled before the digest hour', async () => {
+    // The bug this pins: snapping a zero interval to the digest hour made a freshly enrolled note
+    // invisible until 08:00, so the review card simply did not appear for anyone enrolling earlier.
+    const beforeDigest = Date.UTC(2026, 5, 10, 2, 0); // 05:00 Jerusalem, digest at 08:00
+    const entry = await addEntry('the vase');
+    await enrol(entry.id, beforeDigest);
+
+    const queue = await reviewQueue(10, beforeDigest);
+    expect(queue.map((item) => item.entry.body)).toEqual(['the vase']);
+  });
+
+  it('is due at once when enrolled after the digest hour too', async () => {
+    const afterDigest = Date.UTC(2026, 5, 10, 12, 0); // 15:00 Jerusalem
+    const entry = await addEntry('the vase');
+    await enrol(entry.id, afterDigest);
+    expect(await reviewQueue(10, afterDigest)).toHaveLength(1);
+  });
+
+  it('snaps the *second* review to the digest hour, which is what snapping is for', async () => {
+    const at = Date.UTC(2026, 5, 10, 2, 0);
+    const entry = await addEntry('the vase');
+    await enrol(entry.id, at);
+    await recordReview(entry.id, 'recalled', at);
+
+    const [trigger] = await db.triggers.toArray();
+    expect(minutesOfDay(trigger!.nextFireAt!, JLM)).toBe(8 * 60);
+  });
+});

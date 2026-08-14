@@ -100,8 +100,10 @@ export async function isEnrolled(entryId: ID): Promise<boolean> {
  * is that you want to be shown it, and making the user wait a day for the first sight of it is a
  * strange way to honour that.
  *
- * Goes through `registerTrigger` like everything else, but note that a `spaced` trigger cannot be
- * refused by quiet hours: it has no delivery of its own, so there is nothing to be quiet about.
+ * Goes through `registerTrigger` like everything else. It cannot be refused by quiet hours or the
+ * cap, but not because it is special-cased here — `canInterrupt` says a `spaced` trigger has no
+ * delivery of its own, and the engine exempts exactly those. Getting that wrong meant enrolling a
+ * note at 05:00 silently did nothing.
  */
 export async function enrol(entryId: ID, now: EpochMs = Date.now()): Promise<Trigger | null> {
   if (await isEnrolled(entryId)) return null;

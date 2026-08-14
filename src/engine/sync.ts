@@ -10,7 +10,7 @@
  *    the whole pending set is both simpler than diffing and incapable of drifting.
  */
 
-import type { EpochMs, Trigger } from '../db/schema';
+import type { EpochMs, Trigger, TriggerKind } from '../db/schema';
 import {
   ROUTES,
   SCHEDULE_HORIZON_DAYS,
@@ -31,6 +31,26 @@ import { DAY_MS } from './time';
 // ---------------------------------------------------------------- selection (pure)
 
 /**
+ * Whether a trigger of this kind can ever interrupt the user.
+ *
+ * `spaced` cannot. Spaced-repetition triggers are a *schedule*, not a delivery: dozens of notes can
+ * come due on one day, and pushing each would spend the entire daily cap on review prompts and
+ * starve the reminders the user actually set. One digest trigger carries them instead, so these stay
+ * local and drive only the in-app review queue.
+ *
+ * That single fact has two consequences, and stating it once is the point of this function:
+ *
+ * 1. They are never mirrored to the backend.
+ * 2. **Quiet hours and the daily cap do not apply to them.** Those exist to govern interruptions, and
+ *    something that cannot interrupt is not something to be quiet about. Applying them was a real
+ *    bug: enrolling a note at 05:00 fell inside the default quiet window, so the trigger was refused
+ *    and "keep fresh" silently did nothing at night.
+ */
+export function canInterrupt(kind: TriggerKind): boolean {
+  return kind !== 'spaced';
+}
+
+/**
  * Whether a trigger should currently exist on the backend.
  *
  * Snoozed and inactive triggers are excluded, as is anything beyond the horizon — a
@@ -43,11 +63,7 @@ export function isPushWorthy(
 ): boolean {
   if (!trigger.active) return false;
   if (trigger.nextFireAt === null) return false;
-  // Spaced-repetition triggers are a *schedule*, not a delivery. Dozens of notes can come due on one
-  // day, and pushing each would spend the entire daily cap on review prompts and starve the reminders
-  // the user actually set. One digest trigger carries them instead, so these stay local: they drive
-  // the in-app review queue and never reach the backend.
-  if (trigger.kind === 'spaced') return false;
+  if (!canInterrupt(trigger.kind)) return false;
   if (trigger.nextFireAt <= now) return false;
   if (trigger.nextFireAt > now + horizonMs) return false;
   if (trigger.snoozedUntil !== null && trigger.snoozedUntil > trigger.nextFireAt) return false;

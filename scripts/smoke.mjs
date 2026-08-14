@@ -434,6 +434,29 @@ log(
   (await page.locator('.hour-histogram__bar').count()) === 24,
   'the hour histogram has a bar per hour',
 );
+// Semantic search must be off by default and must state its cost before anything downloads. This is
+// the whole guard against a toggle spending 130 MB of somebody's data allowance.
+log(/Search by meaning/i.test(settingsText), 'the semantic search control is present');
+log(/One-time download of about 130 MB/i.test(settingsText), 'the download size is stated up front', settingsText.match(/One-time download[^.]*\./)?.[0] ?? '(missing)');
+log(
+  await page.locator('button', { hasText: 'Turn it on' }).isVisible(),
+  'semantic search is off by default',
+);
+// And the launch bundle must not carry the model runtime for a feature nobody has enabled.
+const precached = await page.evaluate(async () => {
+  const names = await caches.keys();
+  const urls = [];
+  for (const name of names) {
+    const cache = await caches.open(name);
+    for (const request of await cache.keys()) urls.push(request.url);
+  }
+  return urls;
+});
+log(
+  !precached.some((url) => /transformers|ort-wasm/.test(url)),
+  'the embedding runtime is not precached',
+  `${precached.length} cached entries`,
+);
 await page.screenshot({ path: `${OUT}/09-settings.png` });
 
 // Switch to Hebrew and confirm the document flips.
