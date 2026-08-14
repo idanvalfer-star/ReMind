@@ -459,6 +459,189 @@ log(
 );
 await page.screenshot({ path: `${OUT}/09-settings.png` });
 
+// ---------------------------------------------------------------- sync
+// The sync card is only exercised end to end when this run is pointed at the Worker, because creating a
+// space is a signed API call. `vite preview` serves the assets but has no /api, so against 4173 the
+// checks stop at the form. Production is the Worker, so that is the faithful target:
+//   npx wrangler dev --port 8787 --local  &&  BASE=http://127.0.0.1:8787 node scripts/smoke.mjs
+const hasApi = await page.evaluate(async () => {
+  try {
+    return (await fetch('/api/vapid-public-key')).ok;
+  } catch {
+    return false;
+  }
+});
+
+// Without a push identity the card explains why it is unavailable rather than offering a dead control —
+// sync signs its requests with the push keypair, so it genuinely cannot work first.
+const syncLocked = (await page.locator('.settings').textContent()) ?? '';
+log(/Sync between devices/i.test(syncLocked), 'the sync card renders');
+log(
+  /Turn on notifications first/i.test(syncLocked),
+  'sync explains it needs the push identity first',
+);
+
+// Unlocking the card needs a real device identity, not just a permission: sync signs every request with
+// the keypair that `registerForPush` stores. Headless Chromium cannot complete a genuine
+// `pushManager.subscribe()` — there is no push service behind it — so this writes exactly the row
+// `registerForPush` would write, with a real ECDSA keypair the Worker is told about through the real
+// /api/subscribe route. The signatures that follow are therefore genuine.
+await context.grantPermissions(['notifications'], { origin: BASE });
+const registerIdentity = () =>
+  page.evaluate(async () => {
+  const pair = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, false, [
+    'sign',
+    'verify',
+  ]);
+  const publicKeyJwk = await crypto.subtle.exportKey('jwk', pair.publicKey);
+  const response = await fetch('/api/subscribe', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      endpoint: `https://fcm.googleapis.com/fcm/send/smoke-${Date.now()}`,
+      p256dh: 'B'.repeat(87) + 'A',
+      auth: 'A'.repeat(22),
+      publicKeyJwk,
+    }),
+  });
+  if (!response.ok) return `subscribe failed: ${response.status}`;
+  const { subscriptionId } = await response.json();
+
+  const open = indexedDB.open('remind');
+  const database = await new Promise((resolve, reject) => {
+    open.onsuccess = () => resolve(open.result);
+    open.onerror = () => reject(open.error);
+  });
+  await new Promise((resolve, reject) => {
+    const store = database
+      .transaction('pushRegistration', 'readwrite')
+      .objectStore('pushRegistration');
+    const put = store.put({
+      id: 'singleton',
+      subscriptionId,
+      endpoint: 'https://example.invalid/smoke',
+      p256dh: 'x',
+      auth: 'y',
+      vapidPublicKey: 'z',
+      signingKeyPair: pair,
+      registeredAt: Date.now(),
+      lastReconciledAt: null,
+    });
+      put.onsuccess = () => resolve();
+      put.onerror = () => reject(put.error);
+    });
+    return 'ok';
+  });
+
+const openSettings = async () => {
+  await page.locator('.tabbar__tab', { hasText: 'Settings' }).click();
+  await page.waitForTimeout(700);
+};
+
+const registered = await registerIdentity();
+log(registered === 'ok', 'a device identity could be registered for the sync checks', registered);
+
+await page.reload();
+await page.waitForTimeout(900);
+await openSettings();
+
+// The identity now exists, so notifications must read as genuinely on.
+log(
+  /Reminders are on/i.test((await page.locator('.settings').textContent()) ?? ''),
+  'a registered device reads as notifications on',
+);
+
+// Deleting the registration must take the claim back down with it, live and without a reload. This is
+// the regression: the browser permission stays granted, so anything keyed on permission alone kept
+// saying "reminders are on" while no push could arrive, and offered a sync setup that could not sign.
+await page.locator('.followup button', { hasText: 'Delete' }).click();
+await page.waitForTimeout(800);
+const afterDelete = (await page.locator('.settings').textContent()) ?? '';
+log(!/Reminders are on/i.test(afterDelete), 'deleting the registration stops claiming they are on');
+log(
+  /Turn on notifications first/i.test(afterDelete),
+  'and sync goes back to needing an identity',
+);
+
+// Put it back for the sync flow below.
+log((await registerIdentity()) === 'ok', 'the identity can be re-registered');
+await page.reload();
+await page.waitForTimeout(900);
+await openSettings();
+
+const syncOpen = (await page.locator('.settings').textContent()) ?? '';
+log(/no reset and no recovery/i.test(syncOpen), 'the irreversible warning is shown');
+// Said *before* the field, not after the button — the order is the point, so assert the order.
+const warningBeforeField = await page.evaluate(() => {
+  const warning = [...document.querySelectorAll('.field__help')].find((node) =>
+    /no reset/i.test(node.textContent ?? ''),
+  );
+  const field = document.querySelector('.settings input[type="password"]');
+  if (!warning || !field) return false;
+  return !!(warning.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING);
+});
+log(warningBeforeField, 'the warning precedes the passphrase field in the DOM');
+
+const passphraseField = page.locator('.settings input[type="password"]');
+log(await passphraseField.isVisible(), 'the passphrase field is present');
+
+// A short passphrase must be refused locally, and must not have created a space.
+await passphraseField.fill('short');
+await page.locator('button', { hasText: 'Start syncing' }).click();
+await page.waitForTimeout(500);
+log(
+  /at least 12 characters/i.test((await page.locator('.settings').textContent()) ?? ''),
+  'a short passphrase is refused',
+);
+log(
+  (await page.evaluate(async () => {
+    const request = indexedDB.open('remind');
+    const database = await new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result);
+    });
+    return await new Promise((resolve) => {
+      const store = database.transaction('syncSpace').objectStore('syncSpace');
+      const all = store.getAll();
+      all.onsuccess = () => resolve(all.result.length);
+      all.onerror = () => resolve(-1);
+    });
+  })) === 0,
+  'no space was created by the refused attempt',
+);
+
+if (hasApi) {
+  await passphraseField.fill('a-long-enough-passphrase');
+  await page.locator('button', { hasText: 'Start syncing' }).click();
+  // Not a fixed wait: deriving the key is 600k PBKDF2 iterations and then every existing record gets
+  // encrypted, which on a run that has captured this much data takes longer than any timeout worth
+  // hardcoding. The button re-enabling is the actual signal that the first sync finished.
+  await page
+    .locator('button:not([disabled])', { hasText: 'Sync now' })
+    .waitFor({ timeout: 60_000 });
+
+  const syncing = (await page.locator('.settings').textContent()) ?? '';
+  log(/Syncing/.test(syncing) && !/Start syncing/.test(syncing), 'creating a space turns sync on');
+  log(/carries no passphrase and no key/i.test(syncing), 'the code is labelled as not secret');
+  const shownCode = (await page.locator('.sync-code').textContent()) ?? '';
+  log(/^[A-Za-z0-9_-]+-[A-Za-z0-9_-]+$/.test(shownCode.trim()), 'a space code is displayed', shownCode.trim().slice(0, 24));
+  // The passphrase must not survive in the form after the space is created.
+  log((await passphraseField.count()) === 0, 'the passphrase field is gone once syncing');
+  // Records reached the server: the run captured a real entry count earlier, so pushed must be > 0.
+  log(/Sent/.test(syncing), 'the first sync reports records sent', syncing.match(/Sent\s*\d+/)?.[0] ?? '(no count)');
+  await page.screenshot({ path: `${OUT}/17-sync-on.png` });
+
+  // A second sync with nothing changed reports no counts at all rather than zeroes.
+  await page.locator('button', { hasText: 'Sync now' }).click();
+  await page.waitForTimeout(300);
+  await page
+    .locator('button:not([disabled])', { hasText: 'Sync now' })
+    .waitFor({ timeout: 60_000 });
+  const second = (await page.locator('.settings').textContent()) ?? '';
+  log(!/Sent\s*[1-9]/.test(second), 'a second sync sends nothing new', second.match(/Sent\s*\d+/)?.[0] ?? '(no count, as expected)');
+} else {
+  log(true, 'sync create flow skipped — no /api on this origin', BASE);
+}
+
 // Switch to Hebrew and confirm the document flips.
 await page.selectOption('.settings select', 'he');
 await page.waitForTimeout(900);
@@ -468,6 +651,27 @@ log(dir === 'rtl', 'switching to Hebrew sets dir=rtl', `dir=${dir} lang=${lang}`
 const heText = (await page.locator('.tabbar').textContent()) ?? '';
 log(/הגדרות/.test(heText), 'tab labels are translated', heText.trim());
 await page.screenshot({ path: `${OUT}/10-hebrew-rtl.png` });
+
+// The sync card under RTL. Its code block is deliberately LTR-and-monospace inside an RTL column, which
+// is exactly the kind of thing that renders backwards if `direction` is inherited rather than set.
+const heSync = (await page.locator('.settings').textContent()) ?? '';
+log(/סנכרון בין מכשירים/.test(heSync), 'the sync card is translated');
+if (hasApi) {
+  const codeDir = await page.evaluate(() => {
+    const node = document.querySelector('.sync-code');
+    return node ? getComputedStyle(node).direction : null;
+  });
+  log(codeDir === 'ltr', 'the space code stays LTR under RTL', `direction=${codeDir}`);
+  await page.screenshot({ path: `${OUT}/18-hebrew-sync.png` });
+
+  // Stop syncing, so a smoke run leaves no space behind on the server it was pointed at.
+  await page.locator('button', { hasText: 'להפסיק לסנכרן' }).click();
+  await page.waitForTimeout(1500);
+  log(
+    (await page.locator('.sync-code').count()) === 0,
+    'stopping sync removes the space from this device',
+  );
+}
 
 // The People screen in RTL. Its rows mix a Latin name with Hebrew status text, which is exactly
 // where a layout built on physical rather than logical properties falls apart.

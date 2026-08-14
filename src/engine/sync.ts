@@ -121,7 +121,13 @@ function resolveFetch(options: BackendOptions): FetchLike {
   return impl;
 }
 
-async function postSigned<TResponse>(
+/**
+ * Signs and sends one POST.
+ *
+ * Exported because the sync client needs exactly this and duplicating it would mean two
+ * canonicalisations that could drift — the very failure the shared protocol module exists to prevent.
+ */
+export async function postSigned<TResponse>(
   ctx: SignedContext,
   path: string,
   payload: unknown,

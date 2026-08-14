@@ -69,12 +69,28 @@ export function readPlatform(): PlatformFacts {
  *
  * Pure, so the whole decision table is testable — which matters, because getting this wrong on iOS
  * costs the user their one chance to grant permission.
+ *
+ * `hasRegistration` is a separate argument rather than a `PlatformFacts` field because it does not come
+ * from the browser: it lives in IndexedDB, which `readPlatform` cannot read synchronously. Making it an
+ * explicit parameter means no caller can silently forget it — which is the bug this signature exists to
+ * prevent. **A granted permission does not imply this device holds an identity.** The two come apart
+ * whenever the registration is dropped while the permission survives: deleting the registration from
+ * Settings, restoring a backup, or clearing site data without clearing permissions. Treating those as
+ * `granted` told the user "reminders are on" when nothing would ever arrive, and offered a sync setup
+ * that could not sign a single request.
  */
-export function pushAvailability(facts: PlatformFacts): PushAvailability {
-  if (facts.permission === 'granted') return 'granted';
+export function pushAvailability(
+  facts: PlatformFacts,
+  hasRegistration: boolean,
+): PushAvailability {
   if (facts.permission === 'denied') return 'denied';
 
   if (!facts.hasServiceWorker || !facts.hasNotification) return 'unsupported';
+
+  // Granted *and* registered is the only state that is actually on. Granted without a registration
+  // falls through to the support checks below and comes out as `available` — which is accurate: we can
+  // register again without prompting, because the permission is already there.
+  if (facts.permission === 'granted' && hasRegistration) return 'granted';
 
   // On iOS, PushManager only exists in a standalone window. Checking standalone first gives the
   // user an actionable answer ("install it") instead of a dead end ("unsupported").

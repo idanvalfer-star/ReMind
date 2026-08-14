@@ -823,3 +823,98 @@ exactly the shape of thing a supply-chain attack targets. Patched releases did e
 Worth knowing: the emitted `ort-wasm-simd-threaded.asyncify.wasm` is 22.5 MiB against Cloudflare's
 25 MiB per-file asset limit. It is served, not precached, so users only fetch it if they enable the
 feature — but the headroom is about 2.5 MiB, and a future onnxruntime release could exceed it.
+
+# Phase 4 — Encrypted sync between devices
+
+## The passphrase is the whole security model, and the cost is stated before the field
+
+The server never receives a key, and there is no account to recover through. That buys real
+confidentiality — and it means **a forgotten passphrase permanently destroys the synced copy**. There is
+no reset, so the warning appears above the passphrase input rather than after the button, where a user
+who has already typed and tapped would read it too late.
+
+The local database is untouched by any of this. Losing the passphrase loses the *synced* copy, not the
+notes on the device — which is why export/import stays the real backup story and the backup nag was not
+weakened once sync existed.
+
+## One PBKDF2 run, split into two secrets
+
+`deriveSpaceSecrets` runs PBKDF2-HMAC-SHA256 at 600,000 iterations once and takes 512 bits from it: the
+first 256 become a non-extractable AES-GCM `CryptoKey`, the second 256 become the join secret. Deriving
+twice would have doubled the cost of the one operation the user waits on, and reusing the encryption key
+as the join proof would have handed the server something derived from the key itself.
+
+Only a hash of the join secret goes to the server. It proves membership without revealing the secret,
+and it is stored on the space rather than recomputed from the verifier ciphertext — an earlier version
+derived it from that ciphertext, which is randomised per IV, so a second device computed a different
+hash and was refused. The passphrase itself never leaves the device in any form.
+
+## The record key is authenticated, not just the record
+
+Every record is sealed with its own `table:id` key as AES-GCM additional authenticated data. Without
+that, a server could move a valid ciphertext from one record to another — the payload would still
+decrypt, and the client would cheerfully write a note over an event. Binding the key means a
+transplanted ciphertext fails to open at all.
+
+## Last write wins, and a deletion wins a dead heat
+
+Conflict resolution is last-write-wins on `updatedAt`, with `preferDeletion` breaking exact ties. Two
+devices that edit the same note in the same millisecond is vanishingly rare; a device that deletes
+something while another is mid-sync is not, and resurrecting deleted content is the worse failure. The
+alternative — CRDTs, or a merge UI — is a large subsystem, and this app's records are small, whole
+documents that are rarely edited concurrently by one person's two devices.
+
+`updatedAt` advances only on a genuine content change, compared through `canonicalJson`. A retry that
+re-pushes identical content therefore cannot win a conflict it should have lost.
+
+## `settings` does not sync
+
+`SYNCED_TABLES` deliberately excludes it. Settings hold the timezone, quiet hours and the daily cap —
+all device-local by nature. Syncing them would let a phone in one timezone rewrite a laptop's quiet
+hours, and the push registration inside it is per-device by definition.
+
+## Revisions are the server's only job
+
+The server assigns a monotonic revision per push batch and clients pull everything above their cursor.
+It never compares content, and cannot: it holds ciphertext. The one comparison it does make is the
+last-write-wins guard `WHERE excluded.updated_at >= sync_records.updated_at`, which uses a timestamp the
+client sends in clear — accepted, and recorded in `PRIVACY.md`, because without it a slow client could
+overwrite newer data.
+
+## Sync rides on the push identity
+
+Signing uses the ECDSA keypair `registerForPush` already created. Minting a second identity for sync
+would mean two keypairs to keep in step, two rows to reconcile, and two things to lose. The consequence
+is that sync requires notifications to have been enabled at least once, which the card states plainly
+rather than presenting a control that cannot work.
+
+## The two bugs the browser found that the unit tests could not
+
+**The sync card never rendered.** `useLiveQuery` reports "not resolved yet" as `undefined`, and
+`db.syncSpace.get('singleton')` also resolves to `undefined` when there is no space. The guard
+`if (space === undefined) return null` therefore could not distinguish loading from empty, and the card
+was invisible in exactly the state where it is the only way forward — no space yet. Sync was complete,
+tested, and unreachable from the UI. `?? null` inside the querier separates the two.
+
+**A granted permission was treated as a device identity.** `pushAvailability` returned `granted` on
+`Notification.permission` alone, so Settings said "Reminders are on" and the sync card unlocked whenever
+the browser permission was set — even with no registration row, which is the state after tapping Delete,
+restoring a backup, or clearing storage without clearing permissions. Sync then signed nothing and
+returned early: the card reported success and no request ever left the browser. `hasRegistration` is now
+a required second argument, so no caller can omit it, and both the Settings section and the header bell
+read it live from the database instead of caching an answer that goes stale.
+
+Neither is reachable from a unit test: one is a render-time sentinel collision, the other a claim about
+what the UI says. Both were found by driving the real app in a real browser against a real Worker.
+
+## What is verified
+
+`src/sync/e2e.test.ts` drives the real client loop — create, join, push, pull, leave — against
+`wrangler dev` and real D1, because the unit suites cover each half in isolation and not the seam. It is
+skipped unless `SYNC_E2E=1`, so `npm test` keeps needing no infrastructure. It covers a second device
+pulling a record, a deletion propagating rather than being undone, a conflict resolving to the newer
+edit, a wrong passphrase being refused, idempotence, and the plaintext being absent from every request
+body.
+
+The at-rest claim was checked separately, by reading the rows out of D1 directly. A deleted record's
+row holds `NULL` ciphertext — a tombstone carries no content at all, not even encrypted.

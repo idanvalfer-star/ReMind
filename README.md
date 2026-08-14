@@ -14,24 +14,30 @@ honestly.
 
 ## Status
 
-**Phase 1.** Capture, calendar, the resurfacing engine, the push pipeline, deterministic
-English/Hebrew parsing, search, backup, and the iOS install flow.
+**Phases 1 through 4.** Capture, calendar, the resurfacing engine, the push pipeline, deterministic
+English/Hebrew parsing, search, backup and the iOS install flow; people and facts with meeting
+briefings; opportunistic location resurfacing; trips with a packing engine and staged reminders;
+spaced repetition with a daily digest and time audits; on-device semantic search; and end-to-end
+encrypted sync between devices.
 
-Verified: 345 tests, `tsc` clean across four project configs, `eslint` clean, and the production
-build produces a working service worker.
+Verified: 794 tests, `tsc` clean across four project configs, `eslint` clean, and the production build
+produces a working service worker with a 561 KB precache.
 
-**Verified in a real browser.** `scripts/smoke.mjs` drives the built app in headless Chromium at
-iPhone viewport size and checks 24 behaviours end to end: capture creating an event silently,
-the actionable offer, the confirmation sheet, the month grid, search, settings, and a full
-Hebrew/RTL round trip. It found a fatal bug the unit tests could not — see the note at the top of
-that file.
+**Verified in a real browser.** `scripts/smoke.mjs` drives the built app in headless Chromium at iPhone
+viewport size and checks 98 behaviours end to end, including a full Hebrew/RTL round trip. It has now
+found several bugs the unit tests could not — a fatal one in Phase 1, a reminder card that claimed more
+reminders than it had armed, and two in sync: a settings card that never rendered at all, and a granted
+notification permission being mistaken for a device identity. Notes at the top of that file and in
+`DECISIONS.md`.
 
-**Not yet verified on an actual iPhone.** Push delivery, home-screen installation and iOS
-notification permission cannot be exercised in a headless browser. That gap closes on your first
-deploy, not before.
+**Verified against a real Worker.** `src/sync/e2e.test.ts` runs the client sync loop against
+`wrangler dev` and real D1. It is skipped unless `SYNC_E2E=1`, so `npm test` needs no infrastructure.
 
-Out of scope for Phase 1, by design: the People and Facts module, trips and packing, spaced
-repetition, semantic search, OCR, and any LLM-based interpretation.
+**Not yet verified on an actual iPhone.** Push delivery, home-screen installation and iOS notification
+permission cannot be exercised in a headless browser. That gap closes on your first deploy, not before.
+
+Out of scope by design: OCR, and any LLM-based interpretation. Shared lists between people — as opposed
+to sync between your own devices — are not built.
 
 ---
 
@@ -93,6 +99,20 @@ To exercise the API and the cron together, build first and run the Worker:
 npm run build
 npm run worker:dev                    # serves dist/ plus /api/*
 npx wrangler dev --test-scheduled     # then curl /__scheduled to fire the cron
+```
+
+The Worker serves `dist/` as well as `/api/*`, which is the production topology — so pointing the browser
+checks at it exercises same-origin API calls the preview server cannot:
+
+```bash
+BASE=http://127.0.0.1:8787 node scripts/smoke.mjs
+```
+
+Sync has its own integration suite against that Worker, kept out of `npm test` because it needs one
+running:
+
+```bash
+SYNC_E2E=1 npx vitest run src/sync/e2e.test.ts
 ```
 
 ---
@@ -198,6 +218,30 @@ button that would fail.
 
 Without notifications ReMind still captures and still shows reminders in the app. It simply cannot
 interrupt you. The install sheet says so outright rather than letting you find out.
+
+---
+
+## Syncing a second device
+
+Sync is off until you turn it on, and it needs notifications enabled first — that is where the device's
+signing identity lives.
+
+On the first device: Settings → **Sync between devices** → choose a passphrase of at least 12 characters
+→ **Start syncing**. Copy the space code it shows you.
+
+On the second device: install it the same way, turn on reminders, then Settings → paste the code →
+enter **the same passphrase** → **Join**.
+
+Two things worth knowing before you start:
+
+- **The passphrase cannot be recovered.** There is no account and no reset. Forget it and the synced copy
+  is unreadable — the server has no key. Notes already on a device stay there; use export for backups.
+- **The space code is not a secret.** It carries a space id and a salt, no key and no passphrase, so
+  emailing it to yourself is fine. The passphrase is the part you have to carry safely.
+
+Records are encrypted on the device before they are sent, and conflicts resolve in favour of the newer
+edit. Settings — timezone, quiet hours, the daily cap — deliberately do not sync; they are per-device.
+See `PRIVACY.md` for what the server can still infer.
 
 ---
 

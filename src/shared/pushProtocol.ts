@@ -55,6 +55,10 @@ export const ROUTES = {
   unschedule: '/api/unschedule',
   reconcile: '/api/reconcile',
   unsubscribe: '/api/unsubscribe',
+  syncJoin: '/api/sync/join',
+  syncPush: '/api/sync/push',
+  syncPull: '/api/sync/pull',
+  syncLeave: '/api/sync/leave',
 } as const;
 
 // ---------------------------------------------------------------- payloads
@@ -96,6 +100,85 @@ export interface ReconcileRequest {
 export interface ReconcileResponse {
   /** What the backend holds after the replace, so the client can detect drift. */
   pushes: ScheduledPush[];
+}
+
+// ---------------------------------------------------------------- sync payloads
+
+/**
+ * One record, sealed.
+ *
+ * `ciphertext` and `iv` are `null` for a tombstone: a deletion carries no content, and sending an
+ * encrypted empty string instead would be paying for a payload that says nothing while making the
+ * server unable to distinguish "deleted" from "empty".
+ */
+export interface SyncRecord {
+  recordKey: string;
+  ciphertext: string | null;
+  iv: string | null;
+  updatedAt: number;
+  deleted: boolean;
+}
+
+/** A record as the server hands it back, stamped with the revision at which it changed. */
+export interface SyncRecordAt extends SyncRecord {
+  revision: number;
+}
+
+/**
+ * Creating or joining a space.
+ *
+ * Both are the same request: the server creates the row if it does not exist and adds the caller's
+ * device key either way. There is no distinction to draw — a space is defined by its id and its
+ * members, and whoever arrives first happens to create it.
+ */
+export interface SyncJoinRequest {
+  spaceId: string;
+  /**
+   * SHA-256 of the passphrase-derived join secret.
+   *
+   * Present on every sync call, not just this one: it is the membership proof, and the server has no
+   * session to remember it in. Sending it repeatedly is what keeps the server free of any state that
+   * could be stolen and replayed as a login.
+   */
+  joinHash: string;
+}
+
+export interface SyncJoinResponse {
+  /** The space's current revision, so a joining device knows where to pull from. */
+  revision: number;
+  /** How many devices are in the space, including this one. Shown in Settings. */
+  members: number;
+}
+
+export interface SyncPushRequest {
+  spaceId: string;
+  joinHash: string;
+  records: SyncRecord[];
+}
+
+export interface SyncPushResponse {
+  /** The space revision after these writes. Becomes the client's new cursor floor. */
+  revision: number;
+}
+
+export interface SyncPullRequest {
+  spaceId: string;
+  joinHash: string;
+  /** Everything with a revision strictly greater than this. */
+  cursor: number;
+  limit?: number;
+}
+
+export interface SyncPullResponse {
+  records: SyncRecordAt[];
+  /** The highest revision in this batch, or the cursor unchanged when it is empty. */
+  cursor: number;
+  /** True when more remains beyond `limit`, so the client pulls again. */
+  more: boolean;
+}
+
+export interface SyncLeaveRequest {
+  spaceId: string;
 }
 
 /**

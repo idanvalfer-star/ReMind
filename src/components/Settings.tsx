@@ -22,6 +22,7 @@ import { parseHHmm } from '../engine/time';
 import { enrolledCount, ensureDigestArmed } from '../spaced/review';
 import { Insights } from './Insights';
 import { SemanticSetting } from './SemanticSetting';
+import { SyncSetting } from './SyncSetting';
 
 export interface SettingsProps {
   locale: Lang;
@@ -40,8 +41,19 @@ function minutesToHHmm(minutes: number): string {
 export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
   const { t } = useTranslation();
   const [settings, setSettings] = useState<SettingsRow | null>(null);
-  const [availability, setAvailability] = useState(() => pushAvailability(readPlatform()));
   const [message, setMessage] = useState<string | null>(null);
+  /**
+   * Whether this device holds a push identity, live from the database rather than copied into state.
+   *
+   * Deriving `availability` from this instead of storing it means every path that creates or destroys
+   * the registration updates the screen on its own — including `forgetPushRegistration`, which used to
+   * leave the section claiming "reminders are on" because the permission it read was still granted.
+   */
+  const hasPushIdentity = useLiveQuery(
+    () => db.pushRegistration.get('singleton').then((row) => !!row),
+    [],
+    undefined,
+  );
   const fileInput = useRef<HTMLInputElement>(null);
   const rotation = useLiveQuery(() => enrolledCount(), [], 0);
 
@@ -56,7 +68,6 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
 
   async function enableNotifications() {
     const outcome = await registerForPush();
-    setAvailability(pushAvailability(readPlatform()));
     if (outcome.kind === 'failed') setMessage(outcome.reason);
     if (outcome.kind === 'registered') {
       await patch({
@@ -88,7 +99,10 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
     }
   }
 
-  if (!settings) return <p className="muted">…</p>;
+  // Both reads are async, and guessing at either one would flash a wrong answer about notifications.
+  if (!settings || hasPushIdentity === undefined) return <p className="muted">…</p>;
+
+  const availability = pushAvailability(readPlatform(), hasPushIdentity);
 
   const lastExport = settings.lastExportAt
     ? new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: settings.timezone }).format(
@@ -132,10 +146,7 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
           <button
             type="button"
             className="button button--quiet"
-            onClick={() => {
-              void forgetPushRegistration();
-              setAvailability(pushAvailability(readPlatform()));
-            }}
+            onClick={() => void forgetPushRegistration()}
           >
             {t('calendar.delete')}
           </button>
@@ -298,6 +309,10 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
           {message}
         </p>
       )}
+      <div style={{ marginBlockStart: 'var(--gap)' }}>
+        <SyncSetting locale={locale} hasPushIdentity={hasPushIdentity} />
+      </div>
+
       <div style={{ marginBlockStart: 'var(--gap)' }}>
         <SemanticSetting
           enabled={settings.semanticSearchEnabled}

@@ -34,6 +34,13 @@ import {
   type UnscheduleRequest,
 } from '../src/shared/pushProtocol';
 import { isAllowedPushEndpoint } from './pushEndpoint';
+import {
+  handleSyncJoin,
+  handleSyncLeave,
+  handleSyncPull,
+  handleSyncPush,
+  type SyncResult,
+} from './sync';
 import { sendPush } from './push/send';
 
 export interface Env {
@@ -102,7 +109,20 @@ function isValidPush(value: unknown): value is ScheduledPush {
 
 interface AuthenticatedRequest {
   subscriptionId: string;
+  /** The device's ECDSA public key JWK, as stored. The identity a sync space is keyed on. */
+  devicePubkey: string;
   body: string;
+}
+
+/**
+ * Turns a sync handler's result into a response.
+ *
+ * The handlers return a discriminated result rather than a `Response` so they can be unit-tested
+ * against a real D1 without asserting on HTTP shapes.
+ */
+function syncResponse<T>(result: SyncResult<T>): Response {
+  if (!result.ok) return problem(result.status, result.detail);
+  return result.value === null ? new Response(null, { status: 204 }) : json(result.value);
 }
 
 /**
@@ -152,7 +172,7 @@ async function authenticate(
   );
   if (!valid) return problem(401, 'unauthorized');
 
-  return { subscriptionId, body };
+  return { subscriptionId, devicePubkey: row.device_pubkey, body };
 }
 
 function parseJson<T>(body: string): T | null {
@@ -492,7 +512,7 @@ export default {
 
     const authenticated = await authenticate(request, env, path, now);
     if (authenticated instanceof Response) return authenticated;
-    const { subscriptionId, body } = authenticated;
+    const { subscriptionId, devicePubkey, body } = authenticated;
 
     switch (path) {
       case ROUTES.schedule:
@@ -503,6 +523,18 @@ export default {
         return handleReconcile(env, subscriptionId, body, now);
       case ROUTES.unsubscribe:
         return handleUnsubscribe(env, subscriptionId);
+
+      // Sync. The device's public key rather than its subscription id is the identity here: a space is
+      // a set of devices, and the subscription is only how one of them receives pushes.
+      case ROUTES.syncJoin:
+        return syncResponse(await handleSyncJoin(env, devicePubkey, parseJson(body), now));
+      case ROUTES.syncPush:
+        return syncResponse(await handleSyncPush(env, devicePubkey, parseJson(body), now));
+      case ROUTES.syncPull:
+        return syncResponse(await handleSyncPull(env, devicePubkey, parseJson(body), now));
+      case ROUTES.syncLeave:
+        return syncResponse(await handleSyncLeave(env, devicePubkey, parseJson(body)));
+
       default:
         return problem(404, 'not found');
     }

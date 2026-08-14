@@ -24,44 +24,71 @@ const facts = (overrides: Partial<PlatformFacts> = {}): PlatformFacts => ({
 });
 
 describe('pushAvailability', () => {
-  it('reports granted and denied before anything else', () => {
-    // Both are terminal: nothing about the platform changes what to do next.
-    expect(pushAvailability(facts({ permission: 'granted' }))).toBe('granted');
-    expect(pushAvailability(facts({ permission: 'denied' }))).toBe('denied');
-    expect(pushAvailability(facts({ permission: 'denied', isIos: true, isStandalone: false }))).toBe(
-      'denied',
-    );
+  it('reports granted only when the device also holds a registration', () => {
+    expect(pushAvailability(facts({ permission: 'granted' }), true)).toBe('granted');
+    expect(pushAvailability(facts({ permission: 'denied' }), true)).toBe('denied');
+    expect(
+      pushAvailability(facts({ permission: 'denied', isIos: true, isStandalone: false }), true),
+    ).toBe('denied');
+  });
+
+  it('treats a granted permission with no registration as available, not on', () => {
+    // The state that shipped a lie: deleting the registration leaves the permission granted, and
+    // reporting that as `granted` told the user reminders were on when no push could ever be
+    // delivered — and let the sync card offer a setup that could not sign a request.
+    expect(pushAvailability(facts({ permission: 'granted' }), false)).toBe('available');
+  });
+
+  it('still refuses an iOS tab even when permission was somehow granted', () => {
+    // Permission can survive an uninstall. Re-registering needs PushManager, which the tab lacks.
+    expect(
+      pushAvailability(
+        facts({ permission: 'granted', isIos: true, isStandalone: false, hasPushManager: false }),
+        false,
+      ),
+    ).toBe('needs-install');
   });
 
   it('tells an iOS browser tab to install, rather than calling it unsupported', () => {
     // The actionable answer. In a tab, iOS does not expose PushManager at all.
     expect(
-      pushAvailability(facts({ isIos: true, isStandalone: false, hasPushManager: false })),
+      pushAvailability(facts({ isIos: true, isStandalone: false, hasPushManager: false }), false),
     ).toBe('needs-install');
   });
 
   it('allows the request once iOS is running standalone', () => {
-    expect(pushAvailability(facts({ isIos: true, isStandalone: true }))).toBe('available');
+    expect(pushAvailability(facts({ isIos: true, isStandalone: true }), false)).toBe('available');
   });
 
   it('allows the request on a desktop browser without any install step', () => {
-    expect(pushAvailability(facts({ isIos: false, isStandalone: false }))).toBe('available');
+    expect(pushAvailability(facts({ isIos: false, isStandalone: false }), false)).toBe('available');
   });
 
   it('reports unsupported when the platform genuinely cannot do it', () => {
-    expect(pushAvailability(facts({ hasServiceWorker: false }))).toBe('unsupported');
-    expect(pushAvailability(facts({ hasNotification: false }))).toBe('unsupported');
-    expect(pushAvailability(facts({ isIos: false, hasPushManager: false }))).toBe('unsupported');
+    expect(pushAvailability(facts({ hasServiceWorker: false }), false)).toBe('unsupported');
+    expect(pushAvailability(facts({ hasNotification: false }), false)).toBe('unsupported');
+    expect(pushAvailability(facts({ isIos: false, hasPushManager: false }), false)).toBe(
+      'unsupported',
+    );
+    // A stale registration cannot conjure support that is not there.
+    expect(pushAvailability(facts({ hasServiceWorker: false, permission: 'granted' }), true)).toBe(
+      'unsupported',
+    );
   });
 
   it('never returns available for an iOS tab, under any combination', () => {
     // The single most important property here.
     for (const hasPushManager of [true, false]) {
-      for (const permission of ['default'] as const) {
-        expect(
-          pushAvailability(facts({ isIos: true, isStandalone: false, hasPushManager, permission })),
-          `pushManager=${hasPushManager}`,
-        ).not.toBe('available');
+      for (const permission of ['default', 'granted'] as const) {
+        for (const hasRegistration of [true, false]) {
+          expect(
+            pushAvailability(
+              facts({ isIos: true, isStandalone: false, hasPushManager, permission }),
+              hasRegistration,
+            ),
+            `pushManager=${hasPushManager} permission=${permission} registered=${hasRegistration}`,
+          ).not.toBe('available');
+        }
       }
     }
   });

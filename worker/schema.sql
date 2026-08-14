@@ -57,3 +57,75 @@ CREATE INDEX IF NOT EXISTS idx_pending_due
 CREATE INDEX IF NOT EXISTS idx_pending_by_subscription
   ON scheduled_pushes (subscription_id)
   WHERE sent_at IS NULL;
+
+-- ---------------------------------------------------------------------------
+-- End-to-end encrypted sync.
+--
+-- This table is a departure from everything above it, and the difference is worth naming:
+-- the rows above hold only identifiers and timestamps, whereas these hold the user's actual
+-- records — as ciphertext this server cannot read, and has no key for.
+--
+-- What is still visible here, and is stated in PRIVACY.md rather than glossed over:
+-- how many records exist, roughly how large each is, when each last changed, and which
+-- devices belong to the same space. The content is not.
+
+CREATE TABLE IF NOT EXISTS sync_spaces (
+  -- Random UUID minted on the device that created the space. Deliberately *not* derived from
+  -- the passphrase: deriving it would make a weak passphrase enough to locate someone's data,
+  -- turning an offline guessing attack into an online one.
+  id            TEXT PRIMARY KEY,
+
+  -- SHA-256 of a secret derived from the space passphrase, alongside the encryption key. Proves a
+  -- caller knows the passphrase without this server ever holding anything that decrypts data — so a
+  -- leaked space code is not enough to write into someone's space.
+  join_hash     TEXT NOT NULL,
+
+  -- Monotonic revision counter for the space. Every write takes the next value, which is what
+  -- gives clients a cursor to pull from without relying on their own clocks.
+  revision      INTEGER NOT NULL DEFAULT 0,
+
+  created_at    INTEGER NOT NULL,
+  last_write_at INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS sync_members (
+  space_id       TEXT NOT NULL REFERENCES sync_spaces(id) ON DELETE CASCADE,
+
+  -- The device's ECDSA public key, as a JWK — the same identity that signs push scheduling.
+  -- Membership is proved by a signature, so there is no password and no account here.
+  device_pubkey  TEXT NOT NULL,
+
+  joined_at      INTEGER NOT NULL,
+  last_seen_at   INTEGER NOT NULL,
+
+  PRIMARY KEY (space_id, device_pubkey)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS sync_records (
+  space_id    TEXT NOT NULL REFERENCES sync_spaces(id) ON DELETE CASCADE,
+
+  -- "entries:<uuid>". Opaque, and authenticated by AES-GCM as additional data, so this server
+  -- cannot move one record's ciphertext onto another record's key without the client noticing.
+  record_key  TEXT NOT NULL,
+
+  -- AES-256-GCM, base64url, with the authentication tag appended. Unreadable here.
+  ciphertext  TEXT,
+  iv          TEXT,
+
+  -- The client's own edit time, used for last-write-wins. Trusted only as an ordering hint:
+  -- a device with a wrong clock can win arguments, which PRIVACY.md and DECISIONS.md both say.
+  updated_at  INTEGER NOT NULL,
+
+  -- A tombstone. The row is kept rather than deleted so that a device which has been offline
+  -- learns about the deletion instead of re-uploading the record it still has.
+  deleted     INTEGER NOT NULL DEFAULT 0,
+
+  -- The space revision at which this row last changed. Clients pull `revision > cursor`.
+  revision    INTEGER NOT NULL,
+
+  PRIMARY KEY (space_id, record_key)
+) STRICT;
+
+-- The only read path: everything in a space changed since the client's cursor.
+CREATE INDEX IF NOT EXISTS idx_sync_pull
+  ON sync_records (space_id, revision);

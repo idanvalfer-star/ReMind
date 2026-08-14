@@ -16,7 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 
 /** Bumped whenever `stores()` changes. Also stamped into JSON exports. */
-export const DB_VERSION = 4;
+export const DB_VERSION = 5;
 
 // ---------------------------------------------------------------- primitives
 
@@ -367,6 +367,67 @@ export type LinkRelation =
   /** trigger → event | person: this reminder hangs off that thing. */
   | 'about';
 
+// ---------------------------------------------------------------- sync
+
+/**
+ * This device's membership of an end-to-end encrypted sync space.
+ *
+ * A singleton, and deliberately *not* in `TABLE_NAMES`: like `pushRegistration` it is per-install, and
+ * a backup restored onto another device must not silently inherit the first device's sync membership.
+ *
+ * The key is a non-extractable `CryptoKey`. It is stored rather than re-derived on every launch —
+ * 600,000 PBKDF2 iterations is about a second — but because it is non-extractable, storing it does not
+ * put the key bytes anywhere they could be read out. If IndexedDB is evicted the passphrase has to be
+ * typed again, which is the correct consequence.
+ */
+export interface SyncSpace {
+  id: 'singleton';
+  spaceId: ID;
+  /** Base64url PBKDF2 salt. Non-secret. */
+  salt: string;
+  key: CryptoKey;
+  /** Sealed known constant, so a mistyped passphrase is caught at setup rather than at first sync. */
+  verifier: { ciphertext: string; iv: string };
+  /**
+   * SHA-256 of the passphrase-derived join secret — the membership proof sent on every sync call.
+   *
+   * Stored rather than recomputed because the AES key is non-extractable, so the join secret cannot be
+   * recovered from it, and re-deriving it would mean 600,000 PBKDF2 iterations before every sync.
+   *
+   * Storing it is not a meaningful weakening: the server already holds this exact value, and this
+   * device already holds the encryption key, which is strictly more sensitive. Deriving it from the
+   * *verifier* instead would not work at all — the verifier's ciphertext carries a random IV, so two
+   * devices with the same passphrase would compute different hashes and the second could never join.
+   */
+  joinHash: string;
+  enabled: boolean;
+  lastSyncedAt: EpochMs | null;
+  /** Server cursor: the highest revision this device has already pulled. */
+  cursor: number;
+}
+
+/**
+ * Per-record sync bookkeeping.
+ *
+ * Separate from the entities themselves so that adding sync required no change to `Entry`, `Person`,
+ * `PackItem` and the rest. The alternative — an `updatedAt` on every synced table — would have touched
+ * every entity and every writer of one, to store something only this subsystem reads.
+ *
+ * `hash` is what makes change detection work without those timestamps: a row whose canonical hash
+ * differs from the one recorded here has been edited since it was last seen.
+ */
+export interface SyncMeta {
+  /** `"entries:<id>"`. */
+  key: string;
+  hash: string;
+  /** When this device last observed the record change. Drives last-write-wins. */
+  updatedAt: EpochMs;
+  /** Null until the record has been pushed. */
+  syncedAt: EpochMs | null;
+  /** A tombstone: the row is gone locally and the deletion still needs propagating. */
+  deleted: 0 | 1;
+}
+
 // ---------------------------------------------------------------- singletons
 
 export interface QuietHours {
@@ -463,6 +524,8 @@ export class ReMindDB extends Dexie {
   triggerFires!: Table<TriggerFire, ID>;
   links!: Table<Link, ID>;
   embeddings!: Table<Embedding, ID>;
+  syncSpace!: Table<SyncSpace, 'singleton'>;
+  syncMeta!: Table<SyncMeta, string>;
   settings!: Table<Settings, 'singleton'>;
   pushRegistration!: Table<PushRegistration, 'singleton'>;
 
@@ -514,6 +577,13 @@ export class ReMindDB extends Dexie {
     // rather than accumulating stale rows nobody would ever notice.
     this.version(4).stores({
       embeddings: 'entryId, model, createdAt',
+    });
+
+    // v5 — end-to-end encrypted sync. `syncMeta` is indexed on `syncedAt` because "what still needs
+    // pushing" is the query the sync loop runs first and most often.
+    this.version(5).stores({
+      syncSpace: 'id',
+      syncMeta: 'key, syncedAt, updatedAt, deleted',
     });
   }
 }

@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useState, type ReactElement } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import { db, type Lang } from './db/schema';
 import { detectLocale, detectTimezone, loadSettings } from './db/settings';
@@ -52,9 +53,20 @@ export function App() {
   const [ready, setReady] = useState(false);
   const [showInstall, setShowInstall] = useState(false);
   const [backupOverdue, setBackupOverdue] = useState(false);
-  // Drives the header bell, so whether reminders can actually reach you is visible at a glance
-  // rather than buried in settings.
-  const [notificationsOn, setNotificationsOn] = useState(false);
+  /**
+   * Drives the header bell, so whether reminders can actually reach you is visible at a glance rather
+   * than buried in settings.
+   *
+   * A live query rather than state read once on mount: the registration can disappear while the app is
+   * open — Settings can delete it, and a restored backup replaces it — and a bell that stayed lit
+   * afterwards would be claiming reminders work when nothing would arrive.
+   */
+  const hasPushIdentity = useLiveQuery(
+    () => db.pushRegistration.get('singleton').then((row) => !!row),
+    [],
+    false,
+  );
+  const notificationsOn = pushAvailability(readPlatform(), hasPushIdentity) === 'granted';
 
   useEffect(() => {
     let cancelled = false;
@@ -71,7 +83,6 @@ export function App() {
       setTimezone(settings.timezone);
       const platform = readPlatform();
       setShowInstall(shouldShowInstallSheet(platform, settings.onboarding.dismissedInstallSheet));
-      setNotificationsOn(pushAvailability(platform) === 'granted');
       // iOS can clear storage without warning, so the nag is not optional. Only shown once there
       // is something worth losing.
       const since = settings.lastExportAt ?? 0;

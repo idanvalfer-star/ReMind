@@ -94,12 +94,30 @@ downloaded a model and nothing about what you do with it. The vectors it produce
 IndexedDB and are excluded from the JSON backup — they are derived data, and a backup should hold what
 you wrote rather than megabytes of recomputable floats.
 
+### Sync between devices sends ciphertext
+
+Sync is optional and off until you set a passphrase. When it is on, every record is encrypted **on your
+device** with AES-256-GCM before it is sent, using a key derived from your passphrase by PBKDF2-HMAC-SHA256
+at 600,000 iterations. The passphrase never leaves your device, in any form. Neither does the key: it is
+created as a non-extractable `CryptoKey`, so the browser will not let the app read it out even if asked.
+
+The server holds ciphertext it has no key for. It cannot read a note, and neither can anyone with access
+to the database, including whoever runs it.
+
+The trade-off is absolute and worth stating twice: **if you forget the passphrase, the synced copy is
+gone.** There is no account, no reset link and no recovery, because a recovery path is exactly the thing
+that would let the server read your notes.
+
+The space code you copy to your other device carries only a space id and a salt. It is not a key and not
+a password — it is safe to send to yourself in any way you like. The passphrase is the secret, and you
+have to carry that yourself.
+
 ---
 
 ## What this *does* reveal
 
-Two honest caveats. Both are consequences of using Web Push at all, not of choices that could have
-been made differently within it.
+Three honest caveats. The first two are consequences of using Web Push at all, not of choices that could
+have been made differently within it. The third is the price of sync.
 
 ### 1. Timing is metadata
 
@@ -129,6 +147,27 @@ encryption and therefore no keys. It was investigated and rejected — the evide
 push being reliable on iOS is thin, and iOS cancels a subscription outright if a service worker
 receives a push and shows no notification. On the one platform this app is built for, that risk was
 not worth the improvement.
+
+### 3. Sync reveals shape and timing, though not content
+
+Turning sync on puts more rows on the server than push scheduling does, and they carry metadata that
+encryption does not hide:
+
+| What the server holds | What it reveals |
+|---|---|
+| `record_key`, e.g. `entries:<uuid>` | **Which table** a record belongs to — that this is a note rather than a trip — and a stable id |
+| `ciphertext` length | Roughly how long the record is. A one-line note and a long one are distinguishable |
+| `updated_at` | When you last changed that record. Sent in clear, because the server needs it to reject a stale overwrite |
+| `deleted` | That a record was deleted, and when. The row survives as a tombstone so other devices learn about it |
+| `revision` | A counter. Reveals how many times you have pushed |
+| Device public keys per space | How many devices share a space |
+
+So an observer with the database could tell that you keep about forty notes, that you added two on
+Tuesday evening and deleted one on Thursday, and roughly how long each is. They could not tell what any
+of them says.
+
+Content is genuinely absent. Shape and rhythm are not, and no amount of encryption at this layer would
+change that — hiding them needs padding and decoy traffic, which is not implemented.
 
 ---
 
@@ -191,6 +230,13 @@ Stated plainly rather than omitted.
 - **A private event still produces a notification.** Marking an event private keeps its title off
   the notification — the text is replaced, not shortened — but the fact that *something* is
   happening is still visible on your lock screen.
+- **Sync trusts the passphrase and nothing else.** Anyone who learns your passphrase *and* your space
+  code can read everything in that space. There is no second factor and no way to revoke a device that
+  already holds both, short of everyone moving to a new space with a new passphrase.
+- **The server could withhold or reorder records.** It cannot read or forge them — a tampered ciphertext
+  fails to decrypt, and the record key is authenticated — but it could serve a stale set, or drop a
+  record so one device never learns about it. Detecting that needs a signed log per device, which is not
+  implemented.
 
 ---
 
@@ -205,3 +251,24 @@ npx wrangler d1 execute remind-push --remote \
 
 Every row should contain nothing but UUIDs and integers. If you ever see text in there, this
 document is wrong and something is broken.
+
+If you turn sync on, the same check applies to what it stores:
+
+```bash
+npx wrangler d1 execute remind-push --remote \
+  --command "select record_key, length(ciphertext), iv, deleted from sync_records limit 20"
+```
+
+`record_key` is readable by design — it is `entries:<uuid>`, the table name and an id, as the table in
+"What this does reveal" says. Everything else should be opaque base64url. A note you can read in that
+output would mean the encryption is not happening.
+
+The wire can be checked too, without trusting either document:
+
+```bash
+npx wrangler dev --port 8787 --local
+SYNC_E2E=1 npx vitest run src/sync/e2e.test.ts
+```
+
+One of those tests captures every request body the client sends while syncing a note containing a
+distinctive string, and asserts the string appears in none of them.

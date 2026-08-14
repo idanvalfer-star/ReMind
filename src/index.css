@@ -732,3 +732,26 @@ input[type='range']:focus-visible {
 .hour-histogram__bar[data-empty='true'] {
   background: var(--border-strong);
 }
+
+/* ---------------------------------------------------------------- sync */
+
+/*
+ * The space code. Monospaced and wrapping anywhere, because it is a long base64url string the user has
+ * to read across to another device — and `overflow-wrap: anywhere` is what stops it stretching the card
+ * off the side of a phone.
+ */
+.sync-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--card-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.75rem;
+  margin-block: 0.3rem;
+  overflow-wrap: anywhere;
+  /* LTR regardless of document direction: it is an opaque token, not prose. */
+  direction: ltr;
+  text-align: start;
+}
