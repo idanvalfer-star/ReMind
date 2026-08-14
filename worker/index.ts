@@ -39,8 +39,19 @@ import {
   handleSyncLeave,
   handleSyncPull,
   handleSyncPush,
-  type SyncResult,
 } from './sync';
+import { type SyncResult } from './sync';
+import {
+  handleShareCreate,
+  handleShareInvite,
+  handleShareLeave,
+  handleShareLists,
+  handleShareMembers,
+  handleSharePull,
+  handleSharePush,
+  handleShareRedeem,
+  handleShareRevoke,
+} from './share';
 import { sendPush } from './push/send';
 
 export interface Env {
@@ -534,6 +545,27 @@ export default {
         return syncResponse(await handleSyncPull(env, devicePubkey, parseJson(body), now));
       case ROUTES.syncLeave:
         return syncResponse(await handleSyncLeave(env, devicePubkey, parseJson(body)));
+
+      // Shared lists. Same identity as sync — the device key — because a list is a set of devices
+      // too. The difference is that here the role attached to that key decides what it may do.
+      case ROUTES.shareCreate:
+        return syncResponse(await handleShareCreate(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareInvite:
+        return syncResponse(await handleShareInvite(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareRedeem:
+        return syncResponse(await handleShareRedeem(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareLists:
+        return syncResponse(await handleShareLists(env, devicePubkey));
+      case ROUTES.sharePush:
+        return syncResponse(await handleSharePush(env, devicePubkey, parseJson(body), now));
+      case ROUTES.sharePull:
+        return syncResponse(await handleSharePull(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareMembers:
+        return syncResponse(await handleShareMembers(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareRevoke:
+        return syncResponse(await handleShareRevoke(env, devicePubkey, parseJson(body), now));
+      case ROUTES.shareLeave:
+        return syncResponse(await handleShareLeave(env, devicePubkey, parseJson(body)));
 
       default:
         return problem(404, 'not found');

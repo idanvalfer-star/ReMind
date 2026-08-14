@@ -59,6 +59,15 @@ export const ROUTES = {
   syncPush: '/api/sync/push',
   syncPull: '/api/sync/pull',
   syncLeave: '/api/sync/leave',
+  shareCreate: '/api/share/create',
+  shareInvite: '/api/share/invite',
+  shareRedeem: '/api/share/redeem',
+  shareLists: '/api/share/lists',
+  sharePush: '/api/share/push',
+  sharePull: '/api/share/pull',
+  shareMembers: '/api/share/members',
+  shareRevoke: '/api/share/revoke',
+  shareLeave: '/api/share/leave',
 } as const;
 
 // ---------------------------------------------------------------- payloads
@@ -179,6 +188,114 @@ export interface SyncPullResponse {
 
 export interface SyncLeaveRequest {
   spaceId: string;
+}
+
+// ---------------------------------------------------------------- shared list payloads
+
+/**
+ * Membership of a shared list is proved by the request signature and nothing else.
+ *
+ * Sync sends a `joinHash` on every call because its membership derives from a passphrase the server
+ * must not learn. Here there is no passphrase: the server holds a row saying this device key is a
+ * member with a role, and every signed request already proves possession of that key. Adding a shared
+ * secret would be a second thing to leak that proves less than the signature does.
+ */
+export type ShareRoleWire = 'owner' | 'editor' | 'viewer';
+
+export interface ShareCreateRequest {
+  /** Client-minted, so the creator can seal records under it before the round trip completes. */
+  listId: string;
+}
+
+export interface ShareCreateResponse {
+  listId: string;
+  revision: number;
+}
+
+/**
+ * Minting an invite.
+ *
+ * The server is given only the token's hash — never the token, which stays on the inviting device and
+ * goes into the code the user sends. A stolen database therefore yields no working invites.
+ */
+export interface ShareInviteRequest {
+  listId: string;
+  tokenHash: string;
+  role: ShareRoleWire;
+  expiresAt: number;
+}
+
+export interface ShareRedeemRequest {
+  listId: string;
+  /** Hash of the token from the invite code; the server compares hashes, never plaintext. */
+  tokenHash: string;
+}
+
+export type ShareRedeemResponse =
+  | { kind: 'joined'; role: ShareRoleWire; revision: number }
+  /** Distinguished from `unknown` on purpose: "already used" is what tells someone they were beaten to it. */
+  | { kind: 'already-used' }
+  | { kind: 'expired' }
+  | { kind: 'unknown' };
+
+/** One list this device belongs to, as the server sees it. */
+export interface ShareMembership {
+  listId: string;
+  role: ShareRoleWire;
+  revision: number;
+  members: number;
+}
+
+export interface ShareListsResponse {
+  lists: ShareMembership[];
+}
+
+export interface SharePushRequest {
+  listId: string;
+  records: SyncRecord[];
+}
+
+export type SharePushResponse =
+  | { kind: 'written'; revision: number }
+  /** A viewer tried to write. Refused here because no key can refuse it. */
+  | { kind: 'forbidden' };
+
+export interface SharePullRequest {
+  listId: string;
+  cursor: number;
+  limit?: number;
+}
+
+/** A shared record carries who last wrote it, which a sync record has no need of. */
+export interface ShareRecordAt extends SyncRecordAt {
+  /** The author's device key, hashed. Enough to group changes by person, never to name one. */
+  author: string;
+}
+
+export interface SharePullResponse {
+  records: ShareRecordAt[];
+  cursor: number;
+  more: boolean;
+  /** This device's current role, so a demotion is noticed on the next pull rather than the next write. */
+  role: ShareRoleWire;
+}
+
+export interface ShareMembersRequest {
+  listId: string;
+}
+
+export interface ShareMembersResponse {
+  members: { author: string; role: ShareRoleWire; joinedAt: number }[];
+}
+
+export interface ShareRevokeRequest {
+  listId: string;
+  /** The hashed device key, as returned by `members` — the client never handles raw keys of others. */
+  author: string;
+}
+
+export interface ShareLeaveRequest {
+  listId: string;
 }
 
 /**

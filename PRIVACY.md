@@ -112,12 +112,35 @@ The space code you copy to your other device carries only a space id and a salt.
 a password — it is safe to send to yourself in any way you like. The passphrase is the secret, and you
 have to carry that yourself.
 
+### Shared lists send ciphertext too, and add one thing sync does not need: a server that enforces roles
+
+A shared list is a different problem from syncing your own devices, and it needed a different design.
+Your sync passphrase decrypts your whole database, so it cannot be handed to a travel companion just to
+let them see a packing list — that would hand over every note along with the socks. So each shared list
+gets its **own** AES-256 key, generated fresh and unrelated to your sync passphrase or any other list's
+key. It travels inside the invite you send, because there is no account system to hand a key to a named
+person through any other way.
+
+Say plainly, in the same register as the passphrase warning above: **whoever holds the invite can read
+the list.** The key is inside it. Invites are single-use and expire in a week so that an old message
+left in a chat thread stops being a working door — but for as long as one is live, it is the credential,
+and no amount of interface copy changes that.
+
+Sharing also asks something of the server that sync never does. A key that can decrypt a record can also
+encrypt one — there is no cryptographic way to hand someone a key that lets them read a list but not
+write to it. So a viewer's inability to write is enforced by the Worker refusing the write, not by
+anything the client holds. Everywhere else in this document, the claims hold even against a Cloudflare
+account you do not control. Here, they do not: **the role boundary between an editor and a viewer is a
+policy this server enforces, not a mathematical guarantee.** If you do not trust whoever runs the
+Worker, do not rely on someone being unable to write just because you set their role to viewer.
+
 ---
 
 ## What this *does* reveal
 
-Three honest caveats. The first two are consequences of using Web Push at all, not of choices that could
-have been made differently within it. The third is the price of sync.
+Four honest caveats. The first two are consequences of using Web Push at all, not of choices that could
+have been made differently within it. The third is the price of sync, and the fourth is the price of
+sharing.
 
 ### 1. Timing is metadata
 
@@ -168,6 +191,18 @@ of them says.
 
 Content is genuinely absent. Shape and rhythm are not, and no amount of encryption at this layer would
 change that — hiding them needs padding and decoy traffic, which is not implemented.
+
+### 4. Sharing tells the server who is in a list, and who wrote what
+
+`shared_members` holds a device's public key against a role, so the server knows how many people are in
+a shared list and can enforce who may write to it — that is what the previous section already said
+plainly. Beyond that, every record carries a hash of the writing device's key so members can be shown
+"changed by" without seeing anyone's name; the server was never told a name and this does not start
+giving it one, but it can tell two members' edits apart, and so can anyone with access to the database.
+
+Combined with the timing and shape metadata described above, an observer with server access could build
+a rough picture of a shared list's activity — how many people are in it, who tends to add items, when.
+Never what any item says.
 
 ---
 
@@ -237,6 +272,14 @@ Stated plainly rather than omitted.
   fails to decrypt, and the record key is authenticated — but it could serve a stale set, or drop a
   record so one device never learns about it. Detecting that needs a signed log per device, which is not
   implemented.
+- **A viewer's read access cannot be revoked once granted.** Removing someone from a shared list stops
+  them reading further updates and stops them writing, full stop — but they already hold the list's key
+  and whatever they already pulled while a member. There is no way to make a device forget a key it
+  already has. Rotating the key and re-inviting everyone else is a real option if that matters to you;
+  this app does not automate it.
+- **A shared list's write permission is enforced by the Worker, not by cryptography.** Said fully above:
+  a key that decrypts a record can also encrypt one, so "editor" versus "viewer" is a rule this server
+  applies, not a guarantee that survives a Worker you do not control.
 
 ---
 
@@ -272,3 +315,17 @@ SYNC_E2E=1 npx vitest run src/sync/e2e.test.ts
 
 One of those tests captures every request body the client sends while syncing a note containing a
 distinctive string, and asserts the string appears in none of them.
+
+The same two checks apply to shared lists, against their own tables:
+
+```bash
+npx wrangler d1 execute remind-push --remote \
+  --command "select list_id, record_key, length(ciphertext), author, deleted from shared_records limit 20"
+
+npx wrangler dev --port 8787 --local
+SHARE_E2E=1 npx vitest run src/share/e2e.test.ts
+```
+
+`author` is a hash of a device's key, not a name — this app has never been told anyone's name and does
+not start here. Everything else follows the same rule as sync: opaque outside `record_key`, and the
+live suite proves it by capturing the wire traffic between two independently-keyed test devices.

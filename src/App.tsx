@@ -149,7 +149,9 @@ export function App() {
         )}
         {view === 'calendar' && ready && <Calendar locale={locale} timezone={timezone} />}
         {view === 'people' && ready && <People locale={locale} />}
-        {view === 'trips' && ready && <Trips locale={locale} timezone={timezone} />}
+        {view === 'trips' && ready && (
+          <Trips locale={locale} timezone={timezone} hasPushIdentity={hasPushIdentity} />
+        )}
         {view === 'search' && ready && <Search locale={locale} timezone={timezone} />}
         {view === 'settings' && ready && (
           <Settings locale={locale} timezone={timezone} onLocaleChange={handleLocaleChange} />

@@ -129,3 +129,93 @@ CREATE TABLE IF NOT EXISTS sync_records (
 -- The only read path: everything in a space changed since the client's cursor.
 CREATE INDEX IF NOT EXISTS idx_sync_pull
   ON sync_records (space_id, revision);
+
+-- ---------------------------------------------------------------------------
+-- Lists shared with other people.
+--
+-- Sync (above) shares everything with your own devices, and its key comes from a passphrase
+-- only you know. Sharing one list with another *person* cannot reuse that: the passphrase
+-- decrypts the whole database, so handing it over to share a packing list would hand over
+-- every note as well. Each shared list therefore has its own key, which travels inside the
+-- invite rather than being derived from anything.
+--
+-- That moves one guarantee. For sync, this server is a place ciphertext sits. Here it is also
+-- the thing that enforces *write* permission: read access is settled by who holds the key, but
+-- nothing cryptographic stops a viewer from producing a valid ciphertext, so the refusal has to
+-- happen here. PRIVACY.md says so plainly rather than implying the encryption covers it.
+
+CREATE TABLE IF NOT EXISTS shared_lists (
+  id            TEXT PRIMARY KEY,
+
+  -- The creator's device key. Kept so ownership survives every member leaving, and so an owner
+  -- can always be told apart from an editor who was granted write access.
+  owner_pubkey  TEXT NOT NULL,
+
+  revision      INTEGER NOT NULL DEFAULT 0,
+  created_at    INTEGER NOT NULL,
+  last_write_at INTEGER NOT NULL
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS shared_members (
+  list_id       TEXT NOT NULL REFERENCES shared_lists(id) ON DELETE CASCADE,
+  device_pubkey TEXT NOT NULL,
+
+  -- 'owner' | 'editor' | 'viewer'. Checked on every write; see worker/share.ts.
+  role          TEXT NOT NULL,
+
+  joined_at     INTEGER NOT NULL,
+  last_seen_at  INTEGER NOT NULL,
+
+  PRIMARY KEY (list_id, device_pubkey)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS shared_invites (
+  -- SHA-256 of the invite token, never the token itself. A leaked database therefore cannot be
+  -- used to join anything: the tokens are not in it, only their hashes.
+  token_hash  TEXT PRIMARY KEY,
+
+  list_id     TEXT NOT NULL REFERENCES shared_lists(id) ON DELETE CASCADE,
+
+  -- The role the invitee gets. Fixed when the invite is created, so redeeming cannot escalate it.
+  role        TEXT NOT NULL,
+
+  created_at  INTEGER NOT NULL,
+
+  -- Invites expire because the key is inside them: an old message in a chat history should stop
+  -- being a working door.
+  expires_at  INTEGER NOT NULL,
+
+  -- Single use. Once redeemed the row is kept rather than deleted, so a second attempt can be
+  -- told "already used" instead of "never existed" — the difference matters when someone is
+  -- trying to work out whether their invite was intercepted.
+  redeemed_at INTEGER,
+  redeemed_by TEXT
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS shared_records (
+  list_id     TEXT NOT NULL REFERENCES shared_lists(id) ON DELETE CASCADE,
+
+  -- "packItems:<uuid>", authenticated as AES-GCM additional data exactly as in sync_records.
+  record_key  TEXT NOT NULL,
+
+  ciphertext  TEXT,
+  iv          TEXT,
+
+  updated_at  INTEGER NOT NULL,
+  deleted     INTEGER NOT NULL DEFAULT 0,
+  revision    INTEGER NOT NULL,
+
+  -- Which member last wrote this row, so a client can show "changed by" without the server
+  -- learning anything it did not already know. It is a device key, not a name — the server has
+  -- never been told anyone's name and this does not start.
+  author      TEXT NOT NULL,
+
+  PRIMARY KEY (list_id, record_key)
+) STRICT;
+
+CREATE INDEX IF NOT EXISTS idx_shared_pull
+  ON shared_records (list_id, revision);
+
+-- Answers "which lists is this device in", which is the first call the client makes on open.
+CREATE INDEX IF NOT EXISTS idx_shared_membership
+  ON shared_members (device_pubkey);

@@ -918,3 +918,101 @@ body.
 
 The at-rest claim was checked separately, by reading the rows out of D1 directly. A deleted record's
 row holds `NULL` ciphertext — a tombstone carries no content at all, not even encrypted.
+
+# Phase 4 — Full shared lists
+
+## A shared list is not "give someone the sync passphrase"
+
+Sync's passphrase decrypts the whole database. Sharing one packing list with a travel companion cannot
+reuse it — that would hand over every note, person and event along with the socks. So every shared list
+gets its own AES-256 key, generated fresh, unrelated to the sync passphrase or any other list's key.
+Revoking a member, or a key ever leaking, costs exactly one list's confidentiality, never the rest.
+
+## The key travels inside the invite, and that is stated as plainly as the sync warning
+
+There is no account system to hand a key to a named person through, so the key has to travel some other
+way — inside the invite code itself. The consequence is unavoidable and is said in the same register as
+sync's passphrase warning: **whoever holds the invite can read the list.** Invites are single-use and
+expire in a week specifically because of this — an old message sitting in a chat thread should stop
+being a working door.
+
+## The server enforces roles, because cryptography cannot
+
+A key that decrypts also encrypts. There is no cryptographic way to hand someone a key that lets them
+read a list but not write to it — "read-only" is not a property AES-GCM has. So a viewer's inability to
+write is enforced by `worker/share.ts` refusing the write, not by anything the client holds. Stated
+without softening in `PRIVACY.md`: if you do not trust the Worker, do not rely on roles. This is the one
+place in the whole sync/share design where the server is asked to do more than store ciphertext it
+cannot read — everywhere else, `PRIVACY.md`'s claims hold even against a malicious server; here, the
+role boundary specifically does not.
+
+## The `tripId` problem
+
+A `PackItem` carries a `tripId`, and the device that creates a share has a real local `Trip` for it. A
+device that only joins by invite does not, and must not be made to invent one — a fabricated destination
+and date range would be wrong data sitting in a real table, and it would drag in weather calls and stage
+reminders that make no sense for a list someone else owns.
+
+The resolution, in `src/share/list.ts`: each device tracks its own **effective trip id** for a list —
+the real trip id if this device owns one, otherwise the list's own id, used as a stable id that belongs
+to no real `Trip` row. Every pulled record has its `tripId` field rewritten to this device's effective
+id before it is written locally, regardless of what the sender's own tripId was. That is what lets
+`packItemsFor`, `togglePacked`, `addPackItem` and `deletePackItem` work completely unmodified for shared
+items — they only ever see a tripId, never a listId, and the packing UI needed no shared-list-specific
+branch at all.
+
+## `packItems` is mirrored twice, by two subsystems that do not know about each other
+
+The same table is in `SYNCED_TABLES` for whole-database sync *and* mirrored per-list by sharing, under
+different keys and disjoint record-key namespaces (`packItems:<id>` vs `<listId>/packItems:<id>`). A row
+can travel through both without either one aware the other exists. That is deliberate: personal sync
+should not depend on whether a trip happens to be shared, and sharing should not depend on whether
+personal sync is even turned on. The alternative — one subsystem aware of the other — would have made
+each harder to reason about for a benefit neither actually needs.
+
+## Invites carry the list's title, because the server was never told it
+
+A device that only ever joins by invite has no other way to learn what the list is called — the title
+is exactly the kind of content this design keeps off the server. So it travels inside the invite, base64
+encoded as its own field so a title containing the payload's own `.` separator cannot be mistaken for a
+field boundary. Caught by a test that puts literal dots in a title before this was in place.
+
+## A checksum on the invite payload, for a truncated code rather than an attacker
+
+Chopping the tail off an invite code still decodes if nothing catches it — the key and token survive
+intact, and the payload's trailing digits (the expiry) are what gets corrupted. That reads as an invite
+that is somehow already **expired**, sending the user to ask for a fresh one when what they needed was
+to copy the whole of the one they had. A plain, non-cryptographic checksum on the payload catches this at
+the door instead. It is not a security measure — anyone able to alter a code already holds the key
+inside it — and does not pretend to be one.
+
+## The bug the browser found twice, and the one it found once more
+
+`TripShareCard`'s live query hit the exact same failure as `SyncSetting`'s did in the sync build: a
+`useLiveQuery` reporting "not resolved yet" as `undefined`, and `.first()` resolving to `undefined` for
+"no shared list exists for this trip" too — the ordinary case, since most trips are never shared. The
+card was stuck behind its own loading guard forever, this time for a genuinely more common condition
+than sync's equivalent bug. Caught by the same discipline that caught it the first time: drive the built
+app in a real browser rather than trusting that a component which typechecks also renders.
+
+A second, different bug turned up only once a browser test tried to make one device recognise itself in
+its own member list. `hashDeviceKey` computed a stable hash of a hand-picked, reordered subset of JWK
+fields, on the theory that field-order independence was worth having. It produced a real, stable,
+consistent hash — just not the *same* one the server computes from the literal JSON string a device
+sent at subscribe time. Every other check in the 23-test live suite passed with this bug in place —
+signing, pushing, pulling, revoking, invites all worked — because none of them compared two
+independently-computed hashes of the same key against each other. Only "does this device recognise
+itself" does. Fixed by making the client reproduce the server's computation exactly rather than
+inventing a different, equally-valid one; a unit test now pins the production path — stringify, send,
+parse, hash — end to end.
+
+## What is verified
+
+`src/share/list.test.ts` covers change detection and merge resolution against fake-indexeddb, mirroring
+`src/sync/sync.test.ts`'s split between pure logic and the network loop. `src/share/e2e.test.ts` drives
+two independent signed identities against a live Worker and real D1 — 24 tests, including the property
+no single-identity test can reach at all: that a viewer's write is refused, that a revoked member is cut
+off from both reading and writing, that an invite works exactly once, and that a stranger holding
+neither key nor membership is refused everything. The at-rest check read `shared_records` directly:
+every row held only a list id, an authenticated record key, an opaque ciphertext, and a hash standing in
+for the author — never anything a person wrote.

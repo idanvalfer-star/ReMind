@@ -16,7 +16,7 @@
 import Dexie, { type Table } from 'dexie';
 
 /** Bumped whenever `stores()` changes. Also stamped into JSON exports. */
-export const DB_VERSION = 5;
+export const DB_VERSION = 6;
 
 // ---------------------------------------------------------------- primitives
 
@@ -428,6 +428,78 @@ export interface SyncMeta {
   deleted: 0 | 1;
 }
 
+// ---------------------------------------------------------------- shared lists
+
+/**
+ * What a member may do with a shared list.
+ *
+ * Read access is enforced by the key: without it there is nothing to read but ciphertext. **Write
+ * access is enforced by the server**, which knows each member's device key and rejects a push from a
+ * viewer. That split is worth stating plainly, because it is the one place this design relies on the
+ * server behaving: a viewer who modified the client could still produce valid ciphertext, and only the
+ * server's refusal stops it from landing. Nothing about roles is a secret from anyone holding the key.
+ */
+export type ShareRole = 'owner' | 'editor' | 'viewer';
+
+export const SHARE_ROLES: readonly ShareRole[] = ['owner', 'editor', 'viewer'];
+
+/**
+ * A list shared with other *people*, as opposed to sync, which shares everything with your own devices.
+ *
+ * These are different problems and they need different keys. The sync key comes from a passphrase and
+ * covers the whole database, so handing it to a travel companion so they can see one packing list would
+ * hand them every note, person and event as well. A shared list therefore carries **its own key**, and
+ * that key travels inside the invite.
+ *
+ * The consequence, stated here because it cannot be designed away: **whoever sees an invite can read
+ * the list.** The key is in it. Invites are single-use and expire so that a stale message in a chat
+ * history stops being a door, but for as long as one is live it is the credential.
+ *
+ * Deliberately excluded from `TABLE_NAMES`, like `pushRegistration` and `syncSpace`. A backup is a
+ * plain JSON file the user downloads, and putting live list keys in it would be a worse failure than
+ * asking a restored device to re-join from a fresh invite.
+ */
+export interface SharedList {
+  /** Server-assigned list id. */
+  id: ID;
+  /**
+   * Raw AES-256 key material, base64url.
+   *
+   * Stored as bytes rather than a `CryptoKey` because the owner has to be able to put it into an
+   * invite, so it cannot be non-extractable the way the sync key is. Storing an extractable `CryptoKey`
+   * instead would look stricter while being exactly as readable.
+   */
+  key: string;
+  /** What this list is a view of. Only packing lists for now; the discriminant keeps it open. */
+  kind: 'packing';
+  /** The local trip whose pack items this list shares, if this device has one. */
+  tripId: ID | null;
+  /** Shown in the UI. Encrypted like any other field when it goes to the server. */
+  title: string;
+  role: ShareRole;
+  /** Highest revision already pulled. */
+  cursor: number;
+  lastSyncedAt: EpochMs | null;
+  createdAt: EpochMs;
+}
+
+/**
+ * Per-record bookkeeping for shared lists, mirroring `SyncMeta`.
+ *
+ * Separate from `syncMeta` rather than shared with it: the same `PackItem` can belong to a shared list
+ * *and* to your own encrypted sync, and the two push to different places at different revisions. One
+ * table keyed only by record would have let one subsystem's cursor overwrite the other's.
+ */
+export interface ShareMeta {
+  /** `"<listId>/packItems:<id>"` — the list id is part of the key for exactly the reason above. */
+  key: string;
+  listId: ID;
+  hash: string;
+  updatedAt: EpochMs;
+  syncedAt: EpochMs | null;
+  deleted: 0 | 1;
+}
+
 // ---------------------------------------------------------------- singletons
 
 export interface QuietHours {
@@ -526,6 +598,8 @@ export class ReMindDB extends Dexie {
   embeddings!: Table<Embedding, ID>;
   syncSpace!: Table<SyncSpace, 'singleton'>;
   syncMeta!: Table<SyncMeta, string>;
+  sharedLists!: Table<SharedList, ID>;
+  shareMeta!: Table<ShareMeta, string>;
   settings!: Table<Settings, 'singleton'>;
   pushRegistration!: Table<PushRegistration, 'singleton'>;
 
@@ -584,6 +658,14 @@ export class ReMindDB extends Dexie {
     this.version(5).stores({
       syncSpace: 'id',
       syncMeta: 'key, syncedAt, updatedAt, deleted',
+    });
+
+    // v6 — lists shared with other people. `shareMeta` is indexed on `listId` as well as the
+    // compound key because every push and pull is scoped to one list, and on `[listId+syncedAt]`
+    // because "what does *this* list still need to send" is the query the share loop opens with.
+    this.version(6).stores({
+      sharedLists: 'id, tripId, kind, role',
+      shareMeta: 'key, listId, [listId+syncedAt], updatedAt, deleted',
     });
   }
 }

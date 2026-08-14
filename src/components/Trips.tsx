@@ -12,6 +12,7 @@ import { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useTranslation } from 'react-i18next';
 import {
+  db,
   PACK_CATEGORIES,
   TRANSIT_MODES,
   type ID,
@@ -40,10 +41,13 @@ import {
   updateTrip,
   type TripSummary,
 } from '../trips/trips';
+import { createSharedList, leaveSharedList, runShareSync } from '../share/list';
 
 export interface TripsProps {
   locale: Lang;
   timezone: string;
+  /** Sharing signs its requests with the push identity, exactly as sync does. */
+  hasPushIdentity: boolean;
 }
 
 interface EditorState {
@@ -70,7 +74,7 @@ function blankEditor(timezone: string): EditorState {
   };
 }
 
-export function Trips({ locale, timezone }: TripsProps) {
+export function Trips({ locale, timezone, hasPushIdentity }: TripsProps) {
   const { t } = useTranslation();
   const [selectedId, setSelectedId] = useState<ID | null>(null);
   const [editor, setEditor] = useState<EditorState | null>(null);
@@ -95,6 +99,7 @@ export function Trips({ locale, timezone }: TripsProps) {
         summary={selected}
         locale={locale}
         timezone={timezone}
+        hasPushIdentity={hasPushIdentity}
         onBack={() => setSelectedId(null)}
         onEdit={() =>
           setEditor({
@@ -156,11 +161,12 @@ interface TripDetailProps {
   summary: TripSummary;
   locale: Lang;
   timezone: string;
+  hasPushIdentity: boolean;
   onBack: () => void;
   onEdit: () => void;
 }
 
-function TripDetail({ summary, locale, timezone, onBack, onEdit }: TripDetailProps) {
+function TripDetail({ summary, locale, timezone, hasPushIdentity, onBack, onEdit }: TripDetailProps) {
   const { t } = useTranslation();
   // i18next's `t` carries overloads that do not structurally satisfy `Translate`, so the generator
   // gets an explicit adapter rather than the function itself.
@@ -291,6 +297,8 @@ function TripDetail({ summary, locale, timezone, onBack, onEdit }: TripDetailPro
         </div>
       </div>
 
+      <TripShareCard tripId={trip.id} title={trip.destination} hasPushIdentity={hasPushIdentity} />
+
       <PackList
         title={t('trips.packing')}
         tripId={trip.id}
@@ -340,6 +348,88 @@ function TripDetail({ summary, locale, timezone, onBack, onEdit }: TripDetailPro
         )}
       </div>
     </section>
+  );
+}
+
+interface TripShareCardProps {
+  tripId: ID;
+  title: string;
+  hasPushIdentity: boolean;
+}
+
+/**
+ * The one sharing action that belongs on the trip screen: starting a share for *this* packing list.
+ *
+ * Everything after that — minting further invites, seeing who is in it, leaving — moves to the Settings
+ * screen's "Shared lists" card, which is the one place that has to work for every shared list, including
+ * ones this device only joined and has no Trip for. Duplicating that management surface here would mean
+ * two places that both have to get the "does this device own the list" branch right.
+ */
+function TripShareCard({ tripId, title, hasPushIdentity }: TripShareCardProps) {
+  const { t } = useTranslation();
+  // The `?? null` matters exactly as it does in SyncSetting: `useLiveQuery`'s "still loading" sentinel
+  // is `undefined`, and `.first()` also resolves to `undefined` when no shared list exists for this
+  // trip — the ordinary case, since most trips are never shared. Without the coalesce those two states
+  // are indistinguishable and the card is stuck behind the loading guard below forever.
+  const list = useLiveQuery(
+    () => db.sharedLists.where('tripId').equals(tripId).first().then((row) => row ?? null),
+    [tripId],
+    undefined,
+  );
+  const [busy, setBusy] = useState(false);
+
+  async function start() {
+    setBusy(true);
+    try {
+      const { list: created } = await createSharedList(tripId, title);
+      if (created) await runShareSync(created.id);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function stop(listId: string) {
+    setBusy(true);
+    try {
+      await leaveSharedList(listId);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (list === undefined) return null;
+
+  return (
+    <div className="card" style={{ marginBlockStart: 'var(--gap)' }}>
+      <span className="card__label">{t('share.tripHeading')}</span>
+      {list ? (
+        <>
+          <p className="item__body">{t('share.tripOn')}</p>
+          <p className="field__help">{t('share.tripManageElsewhere')}</p>
+          <div className="capture__actions">
+            <button
+              type="button"
+              className="button button--quiet button--small"
+              disabled={busy}
+              onClick={() => void stop(list.id)}
+            >
+              {t('share.stopSharing')}
+            </button>
+          </div>
+        </>
+      ) : !hasPushIdentity ? (
+        <p className="empty">{t('share.needsPush')}</p>
+      ) : (
+        <>
+          <p className="item__body">{t('share.tripExplain')}</p>
+          <div className="capture__actions">
+            <button type="button" className="button button--quiet" disabled={busy} onClick={() => void start()}>
+              {busy ? t('share.starting') : t('share.tripStart')}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 

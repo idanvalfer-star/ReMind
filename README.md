@@ -14,30 +14,33 @@ honestly.
 
 ## Status
 
-**Phases 1 through 4.** Capture, calendar, the resurfacing engine, the push pipeline, deterministic
-English/Hebrew parsing, search, backup and the iOS install flow; people and facts with meeting
-briefings; opportunistic location resurfacing; trips with a packing engine and staged reminders;
-spaced repetition with a daily digest and time audits; on-device semantic search; and end-to-end
-encrypted sync between devices.
+**Phases 1 through 4, complete.** Capture, calendar, the resurfacing engine, the push pipeline,
+deterministic English/Hebrew parsing, search, backup and the iOS install flow; people and facts with
+meeting briefings; opportunistic location resurfacing; trips with a packing engine and staged reminders;
+spaced repetition with a daily digest and time audits; on-device semantic search; end-to-end encrypted
+sync between your own devices; and end-to-end encrypted sharing of a packing list with other people.
 
-Verified: 794 tests, `tsc` clean across four project configs, `eslint` clean, and the production build
-produces a working service worker with a 561 KB precache.
+Verified: 839 tests, `tsc` clean across four project configs, `eslint` clean, and the production build
+produces a working service worker with a 580 KB precache.
 
 **Verified in a real browser.** `scripts/smoke.mjs` drives the built app in headless Chromium at iPhone
-viewport size and checks 98 behaviours end to end, including a full Hebrew/RTL round trip. It has now
-found several bugs the unit tests could not — a fatal one in Phase 1, a reminder card that claimed more
-reminders than it had armed, and two in sync: a settings card that never rendered at all, and a granted
-notification permission being mistaken for a device identity. Notes at the top of that file and in
-`DECISIONS.md`.
+viewport size and checks 108 behaviours end to end, including a full Hebrew/RTL round trip. It has found
+several bugs the unit tests could not, all noted at the top of that file and in `DECISIONS.md` — most
+recently the same rendering bug appearing twice in two different cards (a `useLiveQuery` result that is
+`undefined` both while loading and when there is genuinely nothing to show, with no way to tell the two
+apart without an explicit `?? null`), and a device that could not recognise itself in its own shared-list
+member roster because two independently-written functions hashed the same key two different ways.
 
-**Verified against a real Worker.** `src/sync/e2e.test.ts` runs the client sync loop against
-`wrangler dev` and real D1. It is skipped unless `SYNC_E2E=1`, so `npm test` needs no infrastructure.
+**Verified against a real Worker.** `src/sync/e2e.test.ts` and `src/share/e2e.test.ts` run the client
+sync and sharing loops against `wrangler dev` and real D1 — the sharing suite with two independent
+signed device identities, since every interesting property of sharing (a viewer refused a write, a
+revoked member cut off, an invite working exactly once) is a statement about what *someone else* can do.
+Both are skipped unless `SYNC_E2E=1` / `SHARE_E2E=1`, so `npm test` needs no infrastructure.
 
 **Not yet verified on an actual iPhone.** Push delivery, home-screen installation and iOS notification
 permission cannot be exercised in a headless browser. That gap closes on your first deploy, not before.
 
-Out of scope by design: OCR, and any LLM-based interpretation. Shared lists between people — as opposed
-to sync between your own devices — are not built.
+Out of scope by design: OCR, and any LLM-based interpretation.
 
 ---
 
@@ -108,11 +111,12 @@ checks at it exercises same-origin API calls the preview server cannot:
 BASE=http://127.0.0.1:8787 node scripts/smoke.mjs
 ```
 
-Sync has its own integration suite against that Worker, kept out of `npm test` because it needs one
-running:
+Sync and sharing each have their own integration suite against that Worker, kept out of `npm test`
+because they need one running:
 
 ```bash
 SYNC_E2E=1 npx vitest run src/sync/e2e.test.ts
+SHARE_E2E=1 npx vitest run src/share/e2e.test.ts
 ```
 
 ---
@@ -242,6 +246,28 @@ Two things worth knowing before you start:
 Records are encrypted on the device before they are sent, and conflicts resolve in favour of the newer
 edit. Settings — timezone, quiet hours, the daily cap — deliberately do not sync; they are per-device.
 See `PRIVACY.md` for what the server can still infer.
+
+---
+
+## Sharing a packing list
+
+This is a different feature from syncing your own devices — it shares one packing list with someone
+else, not your whole database, using its own key rather than your sync passphrase.
+
+On the trip you want to share: open it → **Share this packing list** → **Share this list**.
+
+To invite someone: Settings → **Shared lists** → **Manage** on that list → pick a role (editor or
+viewer) → **Create invite**. Send the code it produces to whoever you're inviting, by whatever channel
+you'd trust with the list's contents — **the invite carries the list's key, so holding the code is
+enough to read the list.** It works once and expires in a week.
+
+To join a list someone shared with you: Settings → **Shared lists** → paste the invite code → **Join**.
+
+A viewer can see the list but not edit it — enforced by the server, not by the invite itself, because a
+key that decrypts also encrypts and there is no cryptographic way around that. `PRIVACY.md` says this
+plainly rather than implying the encryption covers it. An owner can remove a member from Settings →
+**Manage** → **Members**; removal stops further reads and writes but cannot make a device forget what it
+already downloaded.
 
 ---
 

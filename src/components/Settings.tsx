@@ -22,6 +22,7 @@ import { parseHHmm } from '../engine/time';
 import { enrolledCount, ensureDigestArmed } from '../spaced/review';
 import { Insights } from './Insights';
 import { SemanticSetting } from './SemanticSetting';
+import { ShareSetting } from './ShareSetting';
 import { SyncSetting } from './SyncSetting';
 
 export interface SettingsProps {
@@ -311,6 +312,10 @@ export function Settings({ locale, timezone, onLocaleChange }: SettingsProps) {
       )}
       <div style={{ marginBlockStart: 'var(--gap)' }}>
         <SyncSetting locale={locale} hasPushIdentity={hasPushIdentity} />
+      </div>
+
+      <div style={{ marginBlockStart: 'var(--gap)' }}>
+        <ShareSetting hasPushIdentity={hasPushIdentity} />
       </div>
 
       <div style={{ marginBlockStart: 'var(--gap)' }}>

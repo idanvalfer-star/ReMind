@@ -642,6 +642,57 @@ if (hasApi) {
   log(true, 'sync create flow skipped — no /api on this origin', BASE);
 }
 
+// ---------------------------------------------------------------- shared lists
+// Same rationale as the sync flow above: creating a share is a signed API call, so this only runs
+// against the Worker, not the bare preview server.
+const shareLocked = (await page.locator('.settings').textContent()) ?? '';
+log(/Shared lists/i.test(shareLocked), 'the shared lists card renders');
+log(/not sharing or joined to any lists/i.test(shareLocked), 'it starts with none to manage');
+
+await page.locator('.tabbar__tab', { hasText: 'Trips' }).click();
+await page.waitForTimeout(600);
+await page.locator('.person-row', { hasText: 'Lisbon' }).click();
+await page.waitForTimeout(600);
+
+const tripBeforeShare = (await page.locator('main').textContent()) ?? '';
+log(/Share this packing list/i.test(tripBeforeShare), 'the trip screen offers to share its list');
+
+if (hasApi) {
+  await page.locator('button', { hasText: 'Share this list' }).click();
+  await page.waitForTimeout(2000);
+  const tripAfterShare = (await page.locator('main').textContent()) ?? '';
+  log(/This list is shared/i.test(tripAfterShare), 'the trip screen reflects that it is now shared');
+
+  await page.locator('.tabbar__tab', { hasText: 'Settings' }).click();
+  await page.waitForTimeout(700);
+  const shareOpen = (await page.locator('.settings').textContent()) ?? '';
+  log(/Lisbon/.test(shareOpen), 'the shared list appears in the Settings roster', shareOpen.match(/Lisbon[^·]*/)?.[0] ?? '(missing)');
+  log(/Owner/.test(shareOpen), 'this device is shown as the owner of the list it created');
+
+  // Minting an invite is the one place the "whoever holds this can read the list" warning has to
+  // appear before the code, mirroring the sync passphrase warning's placement.
+  await page.locator('button', { hasText: /^Manage /i }).first().click();
+  await page.waitForTimeout(500);
+  const manager = (await page.locator('.settings').textContent()) ?? '';
+  log(/key travels inside it/i.test(manager), 'the invite warning states the key travels with it');
+
+  await page.locator('button', { hasText: 'Create invite' }).click();
+  await page.waitForTimeout(1000);
+  // The sync space code and the invite code both use `.sync-code` and sync is still on at this point
+  // in the run, so two elements match — the invite is the one that was just added.
+  const inviteCode = (await page.locator('.sync-code').last().textContent()) ?? '';
+  log(inviteCode.trim().length > 0, 'an invite code is produced', inviteCode.trim().slice(0, 24));
+
+  await page.locator('button', { hasText: 'Show members' }).click();
+  await page.waitForTimeout(800);
+  const withMembers = (await page.locator('.settings').textContent()) ?? '';
+  log(/You/.test(withMembers), 'the member list shows this device as the sole member so far');
+
+  // Close the manager so it does not leave a second `.sync-code` element behind for the checks below.
+  await page.locator('button', { hasText: 'Hide' }).click();
+  await page.waitForTimeout(400);
+}
+
 // Switch to Hebrew and confirm the document flips.
 await page.selectOption('.settings select', 'he');
 await page.waitForTimeout(900);
@@ -671,6 +722,20 @@ if (hasApi) {
     (await page.locator('.sync-code').count()) === 0,
     'stopping sync removes the space from this device',
   );
+
+  const heShare = (await page.locator('.settings').textContent()) ?? '';
+  log(/רשימות משותפות/.test(heShare), 'the shared lists card is translated');
+
+  // Leave the shared list too, so this run does not accumulate lists on the Worker it was pointed at.
+  // It was collapsed earlier, so open it again — its own button is under a role-varying label
+  // ("ניהול …"), which the regex matches regardless of the list's title.
+  await page.locator('button', { hasText: /^ניהול/ }).first().click();
+  await page.waitForTimeout(400);
+  const stopSharing = page.locator('button', { hasText: 'הפסק לשתף' }).first();
+  if (await stopSharing.count()) {
+    await stopSharing.click();
+    await page.waitForTimeout(1000);
+  }
 }
 
 // The People screen in RTL. Its rows mix a Latin name with Hebrew status text, which is exactly
