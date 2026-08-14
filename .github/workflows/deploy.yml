@@ -43,6 +43,19 @@ jobs:
       - run: npm test
       - run: npm run build
 
+      # The schema is applied before the Worker that depends on it, so a deploy that
+      # adds a table cannot go live against a database that lacks it — which is how
+      # sync would have shipped as a 500 on first use.
+      #
+      # Safe to run every time: every statement in schema.sql is IF NOT EXISTS, so
+      # this is a no-op once the tables exist. It creates and never alters or drops,
+      # so it cannot destroy data. A change that needs to alter an existing table
+      # will not be handled by this step and has to be applied deliberately.
+      - uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: d1 execute remind-push --remote --file worker/schema.sql -y
+
       - uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
